@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
-import { Prisma } from '@prisma/client';
+import { PrismaClientKnownRequestError, PrismaClientValidationError } from '@prisma/client/runtime/library';
 import { logger } from '@/utils/logger';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -24,7 +24,7 @@ export class ApiError extends Error {
 }
 
 export class ValidationError extends ApiError {
-  constructor(message: string, details?: any) {
+  constructor(message: string, _details?: unknown) {
     super(message, 400);
     this.name = 'ValidationError';
   }
@@ -69,7 +69,7 @@ export const errorHandler = (
   err: Error,
   req: Request,
   res: Response,
-  next: NextFunction
+  _next: NextFunction
 ): void => {
   let error = err;
 
@@ -80,9 +80,9 @@ export const errorHandler = (
   } else {
     // Try to handle Prisma errors if available
     try {
-      if (err instanceof Prisma.PrismaClientKnownRequestError) {
+      if (err instanceof PrismaClientKnownRequestError) {
         error = handlePrismaError(err);
-      } else if (err instanceof Prisma.PrismaClientValidationError) {
+      } else if (err instanceof PrismaClientValidationError) {
         error = new ValidationError('Database validation error');
       }
     } catch (prismaError) {
@@ -108,7 +108,7 @@ export const errorHandler = (
     method: req.method,
     ip: req.ip,
     userAgent: req.get('User-Agent'),
-    userId: (req as any).user?.id,
+    userId: req.user?.id,
   };
 
   if (apiError.statusCode >= 500) {
@@ -118,7 +118,7 @@ export const errorHandler = (
   }
 
   // Send error response
-  const response: any = {
+  const response: Record<string, unknown> = {
     success: false,
     error: apiError.message,
     errorId: apiError.errorId,
@@ -126,14 +126,14 @@ export const errorHandler = (
   };
 
   // Add stack trace in development
-  if (process.env.NODE_ENV === 'development') {
-    response.stack = apiError.stack;
+  if (process.env['NODE_ENV'] === 'development') {
+    response['stack'] = apiError.stack;
   }
 
   res.status(apiError.statusCode).json(response);
 };
 
-function handlePrismaError(error: Prisma.PrismaClientKnownRequestError): ApiError {
+function handlePrismaError(error: PrismaClientKnownRequestError): ApiError {
   switch (error.code) {
     case 'P2002':
       return new ConflictError('A record with this information already exists');

@@ -8,7 +8,6 @@ import {
   cacheManager,
   sessionManager 
 } from '../../config/redis';
-import { logger } from '../../utils/logger';
 
 // Mock logger to avoid console output during tests
 vi.mock('../../utils/logger', () => ({
@@ -197,6 +196,10 @@ describe('Redis Configuration', () => {
       expect(createResult).toBe(true);
       
       const retrievedSession = await sessionManager.getSession(sessionId);
+      expect(retrievedSession).not.toBeNull();
+      if (!retrievedSession) {
+        throw new Error('Expected session to be defined');
+      }
       expect(retrievedSession).toMatchObject({
         userId,
         ...sessionData,
@@ -218,6 +221,10 @@ describe('Redis Configuration', () => {
       expect(updateResult).toBe(true);
       
       const updatedSession = await sessionManager.getSession(sessionId);
+      expect(updatedSession).not.toBeNull();
+      if (!updatedSession) {
+        throw new Error('Expected session to be defined');
+      }
       expect(updatedSession.role).toBe('admin');
       expect(updatedSession.newField).toBe('new value');
     });
@@ -290,12 +297,20 @@ describe('Redis Configuration', () => {
       await new Promise(resolve => setTimeout(resolve, 10));
       
       const session1 = await sessionManager.getSession(sessionId);
+      expect(session1).not.toBeNull();
+      if (!session1) {
+        throw new Error('Expected session to be defined');
+      }
       const firstAccess = session1.lastAccessed;
       
       // Wait a bit more
       await new Promise(resolve => setTimeout(resolve, 10));
       
       const session2 = await sessionManager.getSession(sessionId);
+      expect(session2).not.toBeNull();
+      if (!session2) {
+        throw new Error('Expected session to be defined');
+      }
       const secondAccess = session2.lastAccessed;
       
       expect(new Date(secondAccess).getTime()).toBeGreaterThan(new Date(firstAccess).getTime());

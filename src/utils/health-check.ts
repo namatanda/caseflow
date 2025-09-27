@@ -1,6 +1,11 @@
+import os from 'node:os';
+import { statSync } from 'node:fs';
 import { checkDatabaseConnection } from '../config/database';
 import { checkRedisConnection } from '../config/redis';
 import { logger } from './logger';
+
+type DatabaseHealthDetails = Awaited<ReturnType<typeof checkDatabaseConnection>>['details'];
+type RedisHealthDetails = Awaited<ReturnType<typeof checkRedisConnection>>['details'];
 
 export interface HealthCheckResult {
   status: 'healthy' | 'unhealthy' | 'degraded';
@@ -12,12 +17,12 @@ export interface HealthCheckResult {
     database: {
       status: 'healthy' | 'unhealthy';
       responseTime: number;
-      details: any;
+  details: DatabaseHealthDetails;
     };
     redis: {
       status: 'healthy' | 'unhealthy';
       responseTime: number;
-      details: any;
+  details: RedisHealthDetails;
     };
     memory: {
       status: 'healthy' | 'unhealthy';
@@ -46,8 +51,8 @@ export class HealthChecker {
 
   constructor() {
     this.startTime = Date.now();
-    this.version = process.env.npm_package_version || '1.0.0';
-    this.environment = process.env.NODE_ENV || 'development';
+    this.version = process.env['npm_package_version'] || '1.0.0';
+    this.environment = process.env['NODE_ENV'] || 'development';
   }
 
   async performHealthCheck(): Promise<HealthCheckResult> {
@@ -68,12 +73,21 @@ export class HealthChecker {
         database: {
           status: 'unhealthy',
           responseTime: 0,
-          details: {},
+          details: {
+            canConnect: false,
+            canQuery: false,
+            responseTime: 0,
+          },
         },
         redis: {
           status: 'unhealthy',
           responseTime: 0,
-          details: {},
+          details: {
+            mainClient: false,
+            sessionClient: false,
+            cacheClient: false,
+            responseTime: 0,
+          },
         },
         memory: {
           status: 'healthy',
@@ -130,8 +144,8 @@ export class HealthChecker {
 
     // Check memory usage
     try {
-      const memoryUsage = process.memoryUsage();
-      const totalMemory = require('os').totalmem();
+  const memoryUsage = process.memoryUsage();
+  const totalMemory = os.totalmem();
       const usedMemory = memoryUsage.heapUsed;
       const memoryPercentage = (usedMemory / totalMemory) * 100;
 
@@ -156,8 +170,7 @@ export class HealthChecker {
 
     // Check disk usage (if available)
     try {
-      const fs = require('fs');
-      const stats = fs.statSync(process.cwd());
+  statSync(process.cwd()); // Just check if we can access the current directory
       
       // This is a basic check - in production you might want to use a more sophisticated disk usage check
       result.checks.disk.status = 'healthy';
@@ -169,7 +182,7 @@ export class HealthChecker {
     }
 
     // Determine overall status
-    const hasUnhealthyChecks = Object.values(result.checks).some(check => check.status === 'unhealthy');
+  const hasUnhealthyChecks = Object.values(result.checks).some((check) => check.status === 'unhealthy');
     const hasCriticalErrors = errors.some(error => 
       error.includes('Database') || error.includes('Redis')
     );

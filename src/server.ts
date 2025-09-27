@@ -1,15 +1,16 @@
 import express from 'express';
 import compression from 'compression';
 import morgan from 'morgan';
+import { register } from 'prom-client';
 import { config } from '@/config/environment';
 import { logger } from '@/utils/logger';
-import { 
-  errorHandler, 
-  notFoundHandler, 
+import {
+  errorHandler,
+  notFoundHandler,
   requestLogger,
   getCorsMiddleware,
   generalRateLimit,
-  applySecurity
+  applySecurity,
 } from '@/middleware';
 import { apiRoutes } from '@/routes';
 
@@ -43,7 +44,7 @@ if (config.env !== 'test') {
 app.use(requestLogger);
 
 // Health check endpoint (before other routes)
-app.get('/health', (req, res) => {
+app.get('/health', (_req, res) => {
   res.status(200).json({
     status: 'ok',
     timestamp: new Date().toISOString(),
@@ -52,8 +53,32 @@ app.get('/health', (req, res) => {
   });
 });
 
-// API routes
+// API Routes
 app.use('/api/v1', apiRoutes);
+
+// Direct monitoring endpoints (for backward compatibility)
+app.get('/api/system/health', (_req, res) => {
+  // Simple health check without detailed diagnostics for monitoring
+  res.json({ 
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    service: 'courtflow-backend'
+  });
+});
+
+app.get('/api/system/metrics', (_req, res, next) => {
+  register
+    .metrics()
+    .then((metrics) => {
+      res.set('Content-Type', register.contentType);
+      res.send(metrics);
+    })
+    .catch((error) => {
+      const capturedError = error instanceof Error ? error : new Error(String(error));
+      logger.error('Failed to collect Prometheus metrics', { error: capturedError.message });
+      next(capturedError);
+    });
+});
 
 // 404 handler
 app.use(notFoundHandler);
@@ -69,20 +94,20 @@ const server = app.listen(config.port, () => {
 });
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
-  logger.info('SIGTERM received, shutting down gracefully');
+const gracefulShutdown = (signal: NodeJS.Signals) => {
+  logger.info(`${signal} received, shutting down gracefully`);
   server.close(() => {
     logger.info('Process terminated');
     process.exit(0);
   });
+};
+
+process.on('SIGTERM', () => {
+  gracefulShutdown('SIGTERM');
 });
 
 process.on('SIGINT', () => {
-  logger.info('SIGINT received, shutting down gracefully');
-  server.close(() => {
-    logger.info('Process terminated');
-    process.exit(0);
-  });
+  gracefulShutdown('SIGINT');
 });
 
 export default app;

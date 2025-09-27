@@ -1,110 +1,115 @@
+import type { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
-import { Request, Response, NextFunction } from 'express';
-import { config } from '@/config/environment';
+
 import { logger } from '@/utils/logger';
 
-/**
- * Security headers configuration using Helmet
- */
+const DEFAULT_MAX_REQUEST_SIZE = 10 * 1024 * 1024; // 10MB
+
+const sanitizeString = (value: string): string =>
+  value
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
+    .replace(/javascript:/gi, '')
+    .replace(/\s*on\w+\s*=\s*["'][^"']*["']/gi, '')
+    .replace(/\s*on\w+\s*=\s*[^>\s"']+/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const sanitizeDeep = (value: unknown): unknown => {
+  if (typeof value === 'string') {
+    return sanitizeString(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeDeep(item));
+  }
+
+  if (value && typeof value === 'object') {
+    if (value instanceof Date || value instanceof Buffer || ArrayBuffer.isView(value)) {
+      return value;
+    }
+
+    const source = value as Record<string, unknown>;
+    const sanitized: Record<string, unknown> = {};
+
+    for (const key of Object.keys(source)) {
+      sanitized[key] = sanitizeDeep(source[key]);
+    }
+
+    return sanitized;
+  }
+
+  return value;
+};
+
+const sanitizeInPlace = (value: unknown): void => {
+  if (Array.isArray(value)) {
+    const arrayValue = value as unknown[];
+    for (let index = 0; index < arrayValue.length; index += 1) {
+      arrayValue[index] = sanitizeDeep(arrayValue[index]);
+    }
+    return;
+  }
+
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    for (const key of Object.keys(record)) {
+      record[key] = sanitizeDeep(record[key]);
+    }
+  }
+};
+
+const extractClientIp = (req: Request): string => {
+  const forwarded = req.headers['x-forwarded-for'];
+
+  if (typeof forwarded === 'string') {
+    return forwarded.split(',')[0]?.trim() ?? '';
+  }
+
+  if (Array.isArray(forwarded) && forwarded.length > 0) {
+    return forwarded[0]?.trim() ?? '';
+  }
+
+  return req.ip || req.socket.remoteAddress || '';
+};
+
 export const securityHeaders = helmet({
-  // Content Security Policy
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       scriptSrc: ["'self'"],
-      fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "https:"],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+      imgSrc: ["'self'", 'data:', 'https:'],
       connectSrc: ["'self'"],
-      frameSrc: ["'none'"],
       objectSrc: ["'none'"],
-      mediaSrc: ["'self'"],
-      manifestSrc: ["'self'"],
-      workerSrc: ["'self'"],
-      childSrc: ["'none'"],
-      formAction: ["'self'"],
       frameAncestors: ["'none'"],
-      baseUri: ["'self'"],
-      upgradeInsecureRequests: config.env === 'production' ? [] : null
-    },
-    reportOnly: config.env === 'development'
+      baseUri: ["'self'"]
+    }
   },
-
-  // HTTP Strict Transport Security
   hsts: {
-    maxAge: 31536000, // 1 year
+    maxAge: 31536000,
     includeSubDomains: true,
     preload: true
   },
-
-  // X-Frame-Options
-  frameguard: {
-    action: 'deny'
-  },
-
-  // X-Content-Type-Options
-  noSniff: true,
-
-  // X-XSS-Protection
-  xssFilter: true,
-
-  // Referrer Policy
-  referrerPolicy: {
-    policy: ['no-referrer', 'strict-origin-when-cross-origin']
-  },
-
-  // Hide X-Powered-By header
+  frameguard: { action: 'deny' },
+  dnsPrefetchControl: { allow: false },
   hidePoweredBy: true,
-
-  // DNS Prefetch Control
-  dnsPrefetchControl: {
-    allow: false
-  },
-
-  // Permissions Policy (formerly Feature Policy)
-  permissionsPolicy: {
-    features: {
-      camera: ["'none'"],
-      microphone: ["'none'"],
-      geolocation: ["'none'"],
-      payment: ["'none'"],
-      usb: ["'none'"],
-      magnetometer: ["'none'"],
-      gyroscope: ["'none'"],
-      accelerometer: ["'none'"],
-      ambient_light_sensor: ["'none'"],
-      autoplay: ["'none'"],
-      encrypted_media: ["'none'"],
-      fullscreen: ["'self'"],
-      picture_in_picture: ["'none'"],
-      sync_xhr: ["'none'"]
-    }
-  }
+  noSniff: true,
+  referrerPolicy: { policy: ['no-referrer', 'strict-origin-when-cross-origin'] },
+  crossOriginEmbedderPolicy: false
 });
 
-/**
- * Request sanitization middleware
- * Removes potentially dangerous characters from request data
- */
 export const sanitizeRequest = (
   req: Request,
-  res: Response,
+  _res: Response,
   next: NextFunction
 ): void => {
   try {
-    // Sanitize query parameters
-    if (req.query) {
-      for (const key in req.query) {
-        if (typeof req.query[key] === 'string') {
-          req.query[key] = sanitizeString(req.query[key] as string);
-        }
-      }
-    }
+    req.query = sanitizeDeep(req.query) as typeof req.query;
+    req.params = sanitizeDeep(req.params) as typeof req.params;
 
-    // Sanitize request body (for string values only)
-    if (req.body && typeof req.body === 'object') {
-      sanitizeObject(req.body);
-    }
+    sanitizeInPlace(req.body);
 
     next();
   } catch (error) {
@@ -114,46 +119,15 @@ export const sanitizeRequest = (
       url: req.url,
       method: req.method
     });
+
     next(error);
   }
 };
 
-/**
- * Sanitize string by removing potentially dangerous characters
- */
-function sanitizeString(str: string): string {
-  return str
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '') // Remove script tags
-    .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '') // Remove iframe tags
-    .replace(/javascript:/gi, '') // Remove javascript: protocol
-    .replace(/\s*on\w+\s*=\s*["'][^"']*["']/gi, '') // Remove event handlers with quotes
-    .replace(/\s*on\w+\s*=\s*[^>\s"']+/gi, '') // Remove event handlers without quotes
-    .replace(/\s+/g, ' ') // Normalize whitespace
-    .trim();
-}
-
-/**
- * Recursively sanitize object properties
- */
-function sanitizeObject(obj: any): void {
-  for (const key in obj) {
-    if (obj.hasOwnProperty(key)) {
-      if (typeof obj[key] === 'string') {
-        obj[key] = sanitizeString(obj[key]);
-      } else if (typeof obj[key] === 'object' && obj[key] !== null) {
-        sanitizeObject(obj[key]);
-      }
-    }
-  }
-}
-
-/**
- * IP whitelist middleware (for admin endpoints)
- */
-export const ipWhitelist = (allowedIPs: string[]) => {
+export const ipWhitelist = (allowedIPs: readonly string[]) => {
   return (req: Request, res: Response, next: NextFunction): void => {
-    const clientIP = req.ip || req.connection.remoteAddress || '';
-    
+    const clientIP = extractClientIp(req);
+
     if (!allowedIPs.includes(clientIP)) {
       logger.warn('IP not in whitelist', {
         correlationId: req.correlationId,
@@ -162,25 +136,25 @@ export const ipWhitelist = (allowedIPs: string[]) => {
         url: req.url,
         method: req.method
       });
-      
-      return res.status(403).json({
+
+      res.status(403).json({
         success: false,
         error: 'Access denied from this IP address',
         timestamp: new Date().toISOString()
       });
+      return;
     }
 
     next();
   };
 };
 
-/**
- * Request size limiter middleware
- */
-export const requestSizeLimit = (maxSize: number = 10 * 1024 * 1024) => { // 10MB default
+export const requestSizeLimit = (maxSize: number = DEFAULT_MAX_REQUEST_SIZE) => {
   return (req: Request, res: Response, next: NextFunction): void => {
-    const contentLength = parseInt(req.get('content-length') || '0', 10);
-    
+    const headerValue = req.get('content-length');
+    const parsedLength = headerValue ? Number.parseInt(headerValue, 10) : 0;
+    const contentLength = Number.isNaN(parsedLength) ? 0 : parsedLength;
+
     if (contentLength > maxSize) {
       logger.warn('Request size exceeds limit', {
         correlationId: req.correlationId,
@@ -189,24 +163,18 @@ export const requestSizeLimit = (maxSize: number = 10 * 1024 * 1024) => { // 10M
         url: req.url,
         method: req.method
       });
-      
-      return res.status(413).json({
+
+      res.status(413).json({
         success: false,
         error: 'Request entity too large',
         maxSize: `${maxSize} bytes`,
         timestamp: new Date().toISOString()
       });
+      return;
     }
 
     next();
   };
 };
 
-/**
- * Security middleware that combines all security measures
- */
-export const applySecurity = [
-  securityHeaders,
-  sanitizeRequest,
-  requestSizeLimit()
-];
+export const applySecurity = [securityHeaders, sanitizeRequest, requestSizeLimit()];

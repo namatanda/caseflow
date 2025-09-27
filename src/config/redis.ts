@@ -1,6 +1,18 @@
-import Redis, { Cluster } from 'ioredis';
+import Redis from 'ioredis';
 import { config } from './environment';
 import { logger } from '@/utils/logger';
+
+type JsonPrimitive = string | number | boolean | null;
+type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
+
+const parseJson = <T>(value: string): T | null => {
+  try {
+    return JSON.parse(value) as unknown as T;
+  } catch (error) {
+    logger.error('Failed to parse JSON value from Redis:', error);
+    return null;
+  }
+};
 
 // Redis connection configuration
 const redisConfig = {
@@ -17,7 +29,6 @@ const redisConfig = {
   // Retry configuration
   retryDelayOnClusterDown: 300,
   retryDelayOnClusterFailover: 100,
-  maxRetriesPerRequest: 3,
   // Health check interval
   enableOfflineQueue: false,
 };
@@ -123,7 +134,13 @@ export async function checkRedisConnection(): Promise<{
 
     return {
       isHealthy,
-      details,
+      details: {
+        mainClient: details.mainClient,
+        sessionClient: details.sessionClient,
+        cacheClient: details.cacheClient,
+        responseTime: details.responseTime,
+        ...(details.error && { error: details.error }),
+      },
     };
   } catch (error) {
     details.responseTime = Date.now() - startTime;
@@ -136,7 +153,13 @@ export async function checkRedisConnection(): Promise<{
 
     return {
       isHealthy: false,
-      details,
+      details: {
+        mainClient: details.mainClient,
+        sessionClient: details.sessionClient,
+        cacheClient: details.cacheClient,
+        responseTime: details.responseTime,
+        ...(details.error && { error: details.error }),
+      },
     };
   }
 }
@@ -152,9 +175,14 @@ export async function connectRedisWithRetry(maxRetries: number = 5, delay: numbe
   for (const { name, client } of clients) {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        await client.connect();
-        logger.info(`${name} Redis client connected successfully on attempt ${attempt}`);
-        break;
+        // Try to ping the client to check connection
+        const result = await client.ping();
+        if (result === 'PONG') {
+          logger.info(`${name} Redis client connected successfully on attempt ${attempt}`);
+          break;
+        }
+        
+        throw new Error('Ping did not return PONG');
       } catch (error) {
         logger.warn(`${name} Redis connection attempt ${attempt} failed:`, error);
         
@@ -175,24 +203,27 @@ export async function connectRedisWithRetry(maxRetries: number = 5, delay: numbe
 
 // Cache utilities
 export class CacheManager {
-  private defaultTTL = 300; // 5 minutes
-  private client: Redis;
+  private readonly defaultTTL = 300; // 5 minutes
+  private readonly client: Redis;
 
   constructor(client: Redis = cacheRedis) {
     this.client = client;
   }
 
-  async get<T>(key: string): Promise<T | null> {
+  async get<T extends JsonValue>(key: string): Promise<T | null> {
     try {
       const value = await this.client.get(key);
-      return value ? JSON.parse(value) : null;
+      if (!value) {
+        return null;
+      }
+      return parseJson<T>(value);
     } catch (error) {
       logger.error(`Cache get error for key ${key}:`, error);
       return null;
     }
   }
 
-  async set(key: string, value: any, ttl: number = this.defaultTTL): Promise<boolean> {
+  async set<T extends JsonValue>(key: string, value: T, ttl: number = this.defaultTTL): Promise<boolean> {
     try {
       await this.client.setex(key, ttl, JSON.stringify(value));
       return true;
@@ -224,10 +255,16 @@ export class CacheManager {
 
   async invalidatePattern(pattern: string): Promise<boolean> {
     try {
-      const keys = await this.client.keys(pattern);
+      const searchClient = new Redis(config.redis.url);
+      const fullPattern = `cache:${pattern}`;
+      const keys = await searchClient.keys(fullPattern);
+
       if (keys.length > 0) {
-        await this.client.del(...keys);
+        const keysWithoutPrefix = keys.map((key) => key.replace('cache:', ''));
+        await this.client.del(...keysWithoutPrefix);
       }
+
+      await searchClient.quit();
       return true;
     } catch (error) {
       logger.error(`Cache invalidate pattern error for pattern ${pattern}:`, error);
@@ -235,24 +272,24 @@ export class CacheManager {
     }
   }
 
-  async mget<T>(keys: string[]): Promise<(T | null)[]> {
+  async mget<T extends JsonValue>(keys: string[]): Promise<(T | null)[]> {
     try {
       const values = await this.client.mget(...keys);
-      return values.map(value => value ? JSON.parse(value) : null);
+      return values.map((value) => (value ? parseJson<T>(value) : null));
     } catch (error) {
       logger.error(`Cache mget error for keys ${keys.join(', ')}:`, error);
       return keys.map(() => null);
     }
   }
 
-  async mset(keyValuePairs: Array<{ key: string; value: any; ttl?: number }>): Promise<boolean> {
+  async mset(pairs: Array<{ key: string; value: JsonValue; ttl?: number }>): Promise<boolean> {
     try {
       const pipeline = this.client.pipeline();
-      
-      for (const { key, value, ttl = this.defaultTTL } of keyValuePairs) {
+
+      for (const { key, value, ttl = this.defaultTTL } of pairs) {
         pipeline.setex(key, ttl, JSON.stringify(value));
       }
-      
+
       await pipeline.exec();
       return true;
     } catch (error) {
@@ -285,23 +322,32 @@ export class CacheManager {
 }
 
 // Session management utilities
+interface SessionMetadata extends Record<string, JsonValue> {
+  userId: string;
+  createdAt: string;
+  lastAccessed: string;
+}
+
+type PartialSessionUpdate = Record<string, JsonValue>;
+
 export class SessionManager {
-  private client: Redis;
-  private defaultTTL = 86400; // 24 hours
+  private readonly client: Redis;
+  private readonly defaultTTL = 86400; // 24 hours
 
   constructor(client: Redis = sessionRedis) {
     this.client = client;
   }
 
-  async createSession(sessionId: string, userId: string, data: any = {}): Promise<boolean> {
+  async createSession(sessionId: string, userId: string, data: PartialSessionUpdate = {}): Promise<boolean> {
     try {
-      const sessionData = {
+      const now = new Date().toISOString();
+      const sessionData: SessionMetadata = {
         userId,
-        createdAt: new Date().toISOString(),
-        lastAccessed: new Date().toISOString(),
+        createdAt: now,
+        lastAccessed: now,
         ...data,
       };
-      
+
       await this.client.setex(sessionId, this.defaultTTL, JSON.stringify(sessionData));
       return true;
     } catch (error) {
@@ -310,35 +356,49 @@ export class SessionManager {
     }
   }
 
-  async getSession(sessionId: string): Promise<any | null> {
+  async getSession(sessionId: string): Promise<SessionMetadata | null> {
     try {
-      const sessionData = await this.client.get(sessionId);
-      if (!sessionData) return null;
+      const sessionValue = await this.client.get(sessionId);
+      if (!sessionValue) {
+        return null;
+      }
 
-      const parsed = JSON.parse(sessionData);
-      
-      // Update last accessed time
-      parsed.lastAccessed = new Date().toISOString();
-      await this.client.setex(sessionId, this.defaultTTL, JSON.stringify(parsed));
-      
-      return parsed;
+      const parsed = parseJson<SessionMetadata>(sessionValue);
+      if (!parsed) {
+        return null;
+      }
+
+      const updated = {
+        ...parsed,
+        lastAccessed: new Date().toISOString(),
+      } satisfies SessionMetadata;
+
+      await this.client.setex(sessionId, this.defaultTTL, JSON.stringify(updated));
+      return updated;
     } catch (error) {
       logger.error(`Session get error for session ${sessionId}:`, error);
       return null;
     }
   }
 
-  async updateSession(sessionId: string, data: any): Promise<boolean> {
+  async updateSession(sessionId: string, data: PartialSessionUpdate): Promise<boolean> {
     try {
       const existingSession = await this.client.get(sessionId);
-      if (!existingSession) return false;
+      if (!existingSession) {
+        return false;
+      }
 
-      const sessionData = {
-        ...JSON.parse(existingSession),
+      const parsed = parseJson<SessionMetadata>(existingSession);
+      if (!parsed) {
+        return false;
+      }
+
+      const sessionData: SessionMetadata = {
+        ...parsed,
         ...data,
         lastAccessed: new Date().toISOString(),
       };
-      
+
       await this.client.setex(sessionId, this.defaultTTL, JSON.stringify(sessionData));
       return true;
     } catch (error) {
@@ -359,24 +419,28 @@ export class SessionManager {
 
   async deleteUserSessions(userId: string): Promise<boolean> {
     try {
-      const pattern = `*`;
-      const keys = await this.client.keys(pattern);
-      
-      const userSessions = [];
-      for (const key of keys) {
-        const sessionData = await this.client.get(key);
-        if (sessionData) {
-          const parsed = JSON.parse(sessionData);
-          if (parsed.userId === userId) {
-            userSessions.push(key);
-          }
+      const searchClient = new Redis(config.redis.url);
+      const allKeys = await searchClient.keys('session:*');
+
+      const userSessions: string[] = [];
+      for (const fullKey of allKeys) {
+        const sessionValue = await searchClient.get(fullKey);
+        if (!sessionValue) {
+          continue;
+        }
+
+        const parsed = parseJson<SessionMetadata>(sessionValue);
+        if (parsed?.userId === userId) {
+          const keyWithoutPrefix = fullKey.replace('session:', '');
+          userSessions.push(keyWithoutPrefix);
         }
       }
-      
+
       if (userSessions.length > 0) {
         await this.client.del(...userSessions);
       }
-      
+
+      await searchClient.quit();
       return true;
     } catch (error) {
       logger.error(`Delete user sessions error for user ${userId}:`, error);
@@ -399,24 +463,39 @@ export const cacheManager = new CacheManager();
 export const sessionManager = new SessionManager();
 
 // Graceful shutdown
-export async function disconnectRedis(): Promise<void> {
+const disconnectAllClients = async () => {
   try {
-    await redis.quit();
-    logger.info('Redis connection closed');
+    await Promise.all([
+      redis.quit().catch((error) => logger.error('Error quitting main Redis client:', error)),
+      sessionRedis.quit().catch((error) => logger.error('Error quitting session Redis client:', error)),
+      cacheRedis.quit().catch((error) => logger.error('Error quitting cache Redis client:', error)),
+    ]);
   } catch (error) {
-    logger.error('Error closing Redis connection:', error);
+    logger.error('Unexpected error when quitting Redis clients:', error);
   }
+};
+
+export async function disconnectRedis(): Promise<void> {
+  await disconnectAllClients();
+  logger.info('Redis connections closed');
 }
 
-// Handle process termination
-process.on('beforeExit', async () => {
-  await disconnectRedis();
+const exitRedis = (exitCode?: number) => {
+  void disconnectAllClients().finally(() => {
+    if (typeof exitCode === 'number') {
+      process.exit(exitCode);
+    }
+  });
+};
+
+process.on('beforeExit', () => {
+  void disconnectAllClients();
 });
 
-process.on('SIGINT', async () => {
-  await disconnectRedis();
+process.on('SIGINT', () => {
+  exitRedis(0);
 });
 
-process.on('SIGTERM', async () => {
-  await disconnectRedis();
+process.on('SIGTERM', () => {
+  exitRedis(0);
 });

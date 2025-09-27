@@ -1,9 +1,8 @@
 # Multi-stage build for CourtFlow Backend Service
-FROM node:18-alpine AS base
+FROM node:latest AS base
 
 # Install dependencies only when needed
 FROM base AS deps
-RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 # Copy package files
@@ -12,7 +11,6 @@ RUN npm ci --only=production && npm cache clean --force
 
 # Development dependencies for building
 FROM base AS dev-deps
-RUN apk add --no-cache libc6-compat
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm ci
@@ -34,8 +32,8 @@ FROM base AS runner
 WORKDIR /app
 
 # Create non-root user
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 backend
+RUN groupadd --system --gid 1001 nodejs
+RUN useradd --system --uid 1001 --gid nodejs backend
 
 # Copy built application
 COPY --from=builder --chown=backend:nodejs /app/dist ./dist
@@ -45,6 +43,9 @@ COPY --from=builder --chown=backend:nodejs /app/prisma ./prisma
 
 # Copy scripts
 COPY --from=builder --chown=backend:nodejs /app/scripts ./scripts
+
+# Create logs directory with proper permissions
+RUN mkdir -p logs && chown -R backend:nodejs logs
 
 # Set environment variables
 ENV NODE_ENV=production
@@ -58,7 +59,7 @@ USER backend
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3001/api/system/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"
+  CMD node -e "require('http').get('http://localhost:3001/api/v1/system/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"
 
 # Start the application
 CMD ["node", "dist/server.js"]

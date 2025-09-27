@@ -1,0 +1,40 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+scrape_configs:
+  # The job name is added as a label `job=<job_name>` to any timeseries scraped from this config.
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # CourtFlow Backend API metrics
+  - job_name: 'courtflow-backend'
+    static_configs:
+      - targets: ['backend:3001']
+    metrics_path: '/api/v1/system/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    honor_labels: true
+
+  # Node.js default metrics
+  - job_name: 'courtflow-backend-health'
+    static_configs:
+      - targets: ['backend:3001']
+    metrics_path: '/api/v1/system/health'
+    scrape_interval: 60s
+    scrape_timeout: 5s
+
+  # PostgreSQL metrics (if you add postgres_exporter later)
+  # - job_name: 'postgres'
+  #   static_configs:
+  #     - targets: ['postgres_exporter:9187']
+
+  # Redis metrics (if you add redis_exporter later)
+  # - job_name: 'redis'
+  #   static_configs:
+  #     - targets: ['redis_exporter:9121']

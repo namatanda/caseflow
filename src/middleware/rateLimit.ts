@@ -19,7 +19,7 @@ interface RateLimitConfig {
 /**
  * Create rate limit error response
  */
-const createRateLimitError = (req: Request, res: Response) => {
+const createRateLimitError = (req: Request, res: Response): void => {
   const error = new RateLimitError('Too many requests from this IP, please try again later.');
   
   logger.warn('Rate limit exceeded', {
@@ -66,7 +66,7 @@ export const generalRateLimit = rateLimit({
   // Key generator (default uses IP)
   keyGenerator: (req: Request) => {
     // Use user ID if authenticated, otherwise use IP
-    return req.user?.id || req.ip;
+    return req.user?.id || req.ip || 'unknown';
   }
 });
 
@@ -82,7 +82,7 @@ export const authRateLimit = rateLimit({
   legacyHeaders: false,
   skipSuccessfulRequests: true, // Don't count successful requests
   handler: createRateLimitError,
-  keyGenerator: (req: Request) => req.ip // Always use IP for auth attempts
+  keyGenerator: (req: Request) => req.ip || 'unknown' // Always use IP for auth attempts
 });
 
 /**
@@ -96,7 +96,7 @@ export const uploadRateLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   handler: createRateLimitError,
-  keyGenerator: (req: Request) => req.user?.id || req.ip
+  keyGenerator: (req: Request) => req.user?.id || req.ip || 'unknown'
 });
 
 /**
@@ -110,7 +110,7 @@ export const creationRateLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   handler: createRateLimitError,
-  keyGenerator: (req: Request) => req.user?.id || req.ip
+  keyGenerator: (req: Request) => req.user?.id || req.ip || 'unknown'
 });
 
 /**
@@ -124,25 +124,30 @@ export const searchRateLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   handler: createRateLimitError,
-  keyGenerator: (req: Request) => req.user?.id || req.ip
+  keyGenerator: (req: Request) => req.user?.id || req.ip || 'unknown'
 });
 
 /**
  * Create custom rate limiter with specific configuration
  */
-export const createCustomRateLimit = (config: RateLimitConfig) => {
-  return rateLimit({
-    windowMs: config.windowMs,
-    max: config.max,
-    message: config.message || 'Too many requests, please try again later.',
+export const createCustomRateLimit = (customConfig: RateLimitConfig) => {
+  const options = {
+    windowMs: customConfig.windowMs,
+    max: customConfig.max,
+    message: customConfig.message || 'Too many requests, please try again later.',
     standardHeaders: true,
     legacyHeaders: false,
-    skipSuccessfulRequests: config.skipSuccessfulRequests || false,
-    skipFailedRequests: config.skipFailedRequests || false,
-    skip: config.skip,
+    skipSuccessfulRequests: customConfig.skipSuccessfulRequests ?? false,
+    skipFailedRequests: customConfig.skipFailedRequests ?? false,
     handler: createRateLimitError,
-    keyGenerator: (req: Request) => req.user?.id || req.ip
-  });
+    keyGenerator: (req: Request) => req.user?.id || req.ip || 'unknown',
+  };
+
+  if (customConfig.skip) {
+    return rateLimit({ ...options, skip: customConfig.skip });
+  }
+
+  return rateLimit(options);
 };
 
 /**

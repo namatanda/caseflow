@@ -2,35 +2,25 @@ import { PrismaClient } from '@prisma/client';
 import { config } from './environment';
 import { logger } from '@/utils/logger';
 
-// Global variable to store Prisma client instance
-declare global {
-  var __prisma: PrismaClient | undefined;
-}
+let prismaInstance: PrismaClient | undefined;
 
 // Create Prisma client instance with connection pooling
-export const prisma = globalThis.__prisma || new PrismaClient({
+const createPrismaClient = () => new PrismaClient({
   log: config.env === 'development' ? ['query', 'info', 'warn', 'error'] : ['error'],
   datasources: {
     db: {
       url: config.database.url,
     },
   },
-  // Connection pool configuration
-  __internal: {
-    engine: {
-      // Connection pool settings
-      connectionLimit: 10,
-      poolTimeout: 10000,
-      // Query timeout
-      queryTimeout: 30000,
-    },
-  },
+  // Note: Connection pool settings are configured via DATABASE_URL query parameters
 });
 
-// Prevent multiple instances in development
-if (config.env === 'development') {
-  globalThis.__prisma = prisma;
-}
+export const prisma = (() => {
+  if (!prismaInstance) {
+    prismaInstance = createPrismaClient();
+  }
+  return prismaInstance;
+})();
 
 // Database connection health check with detailed information
 export async function checkDatabaseConnection(): Promise<{
@@ -43,48 +33,49 @@ export async function checkDatabaseConnection(): Promise<{
   };
 }> {
   const startTime = Date.now();
-  const details = {
-    canConnect: false,
-    canQuery: false,
-    responseTime: 0,
-    error: undefined as string | undefined,
-  };
 
   try {
     // Test basic connection
     await prisma.$connect();
-    details.canConnect = true;
+    const canConnect = true;
 
     // Test query execution
     await prisma.$queryRaw`SELECT 1 as test`;
-    details.canQuery = true;
+    const canQuery = true;
 
-    details.responseTime = Date.now() - startTime;
+    const responseTime = Date.now() - startTime;
     
     logger.info('Database health check passed', {
-      responseTime: details.responseTime,
-      canConnect: details.canConnect,
-      canQuery: details.canQuery,
+      responseTime,
+      canConnect,
+      canQuery,
     });
 
     return {
       isHealthy: true,
-      details,
+      details: {
+        canConnect,
+        canQuery,
+        responseTime,
+      },
     };
   } catch (error) {
-    details.responseTime = Date.now() - startTime;
-    details.error = error instanceof Error ? error.message : 'Unknown error';
+    const responseTime = Date.now() - startTime;
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     
     logger.error('Database health check failed:', {
-      error: details.error,
-      responseTime: details.responseTime,
-      canConnect: details.canConnect,
-      canQuery: details.canQuery,
+      error: errorMessage,
+      responseTime,
     });
 
     return {
       isHealthy: false,
-      details,
+      details: {
+        canConnect: false,
+        canQuery: false,
+        responseTime,
+        error: errorMessage,
+      },
     };
   }
 }
@@ -114,7 +105,7 @@ export async function connectWithRetry(maxRetries: number = 5, delay: number = 1
 
 // Transaction wrapper with retry logic
 export async function withTransaction<T>(
-  fn: (prisma: PrismaClient) => Promise<T>,
+  fn: (prisma: Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$extends'>) => Promise<T>,
   maxRetries: number = 3
 ): Promise<T> {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -148,16 +139,22 @@ export async function disconnectDatabase(): Promise<void> {
 }
 
 // Handle process termination
-process.on('beforeExit', async () => {
-  await disconnectDatabase();
+const gracefulExit = (exitCode?: number) => {
+  void disconnectDatabase().finally(() => {
+    if (typeof exitCode === 'number') {
+      process.exit(exitCode);
+    }
+  });
+};
+
+process.on('beforeExit', () => {
+  void disconnectDatabase();
 });
 
-process.on('SIGINT', async () => {
-  await disconnectDatabase();
-  process.exit(0);
+process.on('SIGINT', () => {
+  gracefulExit(0);
 });
 
-process.on('SIGTERM', async () => {
-  await disconnectDatabase();
-  process.exit(0);
+process.on('SIGTERM', () => {
+  gracefulExit(0);
 });

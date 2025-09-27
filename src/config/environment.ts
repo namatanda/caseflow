@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import dotenv from 'dotenv';
 
-// Load environment variables
+// Load environment variables (idempotent)
 dotenv.config();
 
 // Environment validation schema
@@ -37,47 +37,90 @@ const envSchema = z.object({
   API_VERSION: z.string().default('v1'),
 });
 
-// Validate environment variables
-const env = envSchema.parse(process.env);
-
-export const config = {
-  env: env.NODE_ENV,
-  port: env.PORT,
-  
+export type Config = {
+  env: z.infer<typeof envSchema>['NODE_ENV'];
+  port: number;
   database: {
-    url: env.DATABASE_URL,
-    directUrl: env.DIRECT_DATABASE_URL,
-  },
-  
+    url: string;
+    directUrl?: string;
+  };
   redis: {
-    url: env.REDIS_URL,
-  },
-  
+    url: string;
+  };
   jwt: {
-    secret: env.JWT_SECRET,
-    expiresIn: env.JWT_EXPIRES_IN,
-    refreshExpiresIn: env.JWT_REFRESH_EXPIRES_IN,
-  },
-  
+    secret: string;
+    expiresIn: string;
+    refreshExpiresIn: string;
+  };
   cors: {
-    allowedOrigins: env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim()),
-  },
-  
+    allowedOrigins: string[];
+  };
   rateLimit: {
-    maxRequests: env.RATE_LIMIT_MAX_REQUESTS,
-  },
-  
+    maxRequests: number;
+  };
   logging: {
-    level: env.LOG_LEVEL,
-  },
-  
+    level: 'error' | 'warn' | 'info' | 'debug';
+  };
   upload: {
-    maxFileSize: env.MAX_FILE_SIZE,
-  },
-  
+    maxFileSize: number;
+  };
   api: {
-    version: env.API_VERSION,
-  },
-} as const;
+    version: string;
+  };
+};
 
-export type Config = typeof config;
+let cachedConfig: Config | null = null;
+
+function buildConfig(): Config {
+  const env = envSchema.parse(process.env);
+
+  return {
+    env: env.NODE_ENV,
+    port: env.PORT,
+
+    database: {
+      url: env.DATABASE_URL,
+      ...(env.DIRECT_DATABASE_URL ? { directUrl: env.DIRECT_DATABASE_URL } : {}),
+    },
+
+    redis: {
+      url: env.REDIS_URL,
+    },
+
+    jwt: {
+      secret: env.JWT_SECRET,
+      expiresIn: env.JWT_EXPIRES_IN,
+      refreshExpiresIn: env.JWT_REFRESH_EXPIRES_IN,
+    },
+
+    cors: {
+      allowedOrigins: env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim()),
+    },
+
+    rateLimit: {
+      maxRequests: env.RATE_LIMIT_MAX_REQUESTS,
+    },
+
+    logging: {
+      level: env.LOG_LEVEL,
+    },
+
+    upload: {
+      maxFileSize: env.MAX_FILE_SIZE,
+    },
+
+    api: {
+      version: env.API_VERSION,
+    },
+  };
+}
+
+export function loadConfig(forceReload = false): Config {
+  if (!cachedConfig || forceReload) {
+    cachedConfig = buildConfig();
+  }
+
+  return cachedConfig;
+}
+
+export const config = loadConfig();

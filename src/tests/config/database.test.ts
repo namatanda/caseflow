@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import { checkDatabaseConnection, connectWithRetry, withTransaction, prisma } from '../../config/database';
-import { logger } from '../../utils/logger';
 
 // Mock logger to avoid console output during tests
 vi.mock('../../utils/logger', () => ({
@@ -11,6 +11,162 @@ vi.mock('../../utils/logger', () => ({
   },
 }));
 
+type CourtRecord = {
+  id: string;
+  courtName: string;
+  courtCode: string;
+  courtType: string;
+};
+
+const courtRecords: CourtRecord[] = [];
+
+const schemaTables = [
+  'court',
+  'judge',
+  'caseType',
+  'case',
+  'caseActivity',
+  'user',
+  'dailyImportBatch',
+] as const;
+
+type SchemaTable = (typeof schemaTables)[number];
+
+const tableDelegates: Partial<Record<SchemaTable, any>> = {};
+
+const createCourtDelegate = (records: CourtRecord[]) => ({
+  count: vi.fn(async () => records.length),
+  create: vi.fn(async ({ data }: { data: Omit<CourtRecord, 'id'> }) => {
+    if (records.some(record => record.courtCode === data.courtCode)) {
+      const error = new Error('Unique constraint failed on field `courtCode`');
+      (error as any).code = 'P2002';
+      throw error;
+    }
+
+    const newRecord: CourtRecord = {
+      id: randomUUID(),
+      ...data,
+    };
+
+    records.push(newRecord);
+    return newRecord;
+  }),
+  deleteMany: vi.fn(async ({ where }: { where?: { courtCode?: string } }) => {
+    const initialLength = records.length;
+
+    if (where?.courtCode) {
+      for (let index = records.length - 1; index >= 0; index--) {
+        if (records[index].courtCode === where.courtCode) {
+          records.splice(index, 1);
+        }
+      }
+    } else {
+      records.length = 0;
+    }
+
+    return { count: initialLength - records.length };
+  }),
+});
+
+const createCaseDelegate = () => ({
+  count: vi.fn(async () => 0),
+  create: vi.fn(async () => {
+    const error = new Error('Foreign key constraint failed on field `caseTypeId`');
+    (error as any).code = 'P2003';
+    throw error;
+  }),
+});
+
+const createGenericDelegate = () => ({
+  count: vi.fn(async () => 0),
+});
+
+const getTableDelegate = (table: SchemaTable) => {
+  const delegate = tableDelegates[table];
+  if (!delegate) {
+    throw new Error(`Delegate for table ${table} not initialized`);
+  }
+  return delegate;
+};
+
+schemaTables.forEach((table) => {
+  Object.defineProperty(prisma, table, {
+    configurable: true,
+    get: () => getTableDelegate(table),
+  });
+});
+
+const connectMock = vi.spyOn(prisma, '$connect');
+const disconnectMock = vi.spyOn(prisma, '$disconnect');
+const queryRawMock = vi.spyOn(prisma, '$queryRaw');
+const transactionMock = vi.spyOn(prisma, '$transaction');
+const dateNowSpy = vi.spyOn(Date, 'now');
+
+const resetDelegates = () => {
+  tableDelegates.court = createCourtDelegate(courtRecords);
+  tableDelegates.case = createCaseDelegate();
+
+  schemaTables.forEach((table) => {
+    if (table === 'court' || table === 'case') {
+      return;
+    }
+    tableDelegates[table] = createGenericDelegate();
+  });
+};
+
+resetDelegates();
+
+connectMock.mockResolvedValue();
+disconnectMock.mockResolvedValue();
+queryRawMock.mockResolvedValue([{ test: 1 }]);
+
+beforeEach(() => {
+  courtRecords.length = 0;
+  vi.clearAllMocks();
+
+  let nowTick = 1_000;
+  dateNowSpy.mockImplementation(() => {
+    nowTick += 5;
+    return nowTick;
+  });
+
+  resetDelegates();
+
+  connectMock.mockResolvedValue();
+  disconnectMock.mockResolvedValue();
+  queryRawMock.mockResolvedValue([{ test: 1 }]);
+
+  transactionMock.mockImplementation(async (fn) => {
+    const clonedRecords = courtRecords.map(record => ({ ...record }));
+    const txCourtDelegate = createCourtDelegate(clonedRecords);
+    const txCaseDelegate = createCaseDelegate();
+    const txDelegates: Partial<Record<SchemaTable, any>> = {
+      court: txCourtDelegate,
+      case: txCaseDelegate,
+    };
+
+    schemaTables.forEach((table) => {
+      if (table === 'court' || table === 'case') {
+        return;
+      }
+      txDelegates[table] = createGenericDelegate();
+    });
+
+    const txClient = Object.fromEntries(
+      schemaTables.map(table => [table, txDelegates[table]!])
+    ) as unknown as typeof prisma;
+
+    try {
+      const result = await fn(txClient);
+      courtRecords.length = 0;
+      courtRecords.push(...clonedRecords);
+      return result;
+    } catch (error) {
+      throw error;
+    }
+  });
+});
+
 describe('Database Configuration', () => {
   beforeAll(async () => {
     // Ensure database connection is established
@@ -19,6 +175,7 @@ describe('Database Configuration', () => {
 
   afterAll(async () => {
     await prisma.$disconnect();
+    dateNowSpy.mockRestore();
   });
 
   describe('checkDatabaseConnection', () => {
@@ -43,30 +200,26 @@ describe('Database Configuration', () => {
   describe('connectWithRetry', () => {
     it('should successfully connect to database', async () => {
       const result = await connectWithRetry(3, 100);
-      
+
       expect(result).toBe(true);
+      expect(connectMock).toHaveBeenCalled();
     });
 
     it('should retry connection on failure', async () => {
       // Mock a temporary connection failure
-      const originalConnect = prisma.$connect;
       let attempts = 0;
-      
-      prisma.$connect = vi.fn().mockImplementation(() => {
+
+      connectMock.mockImplementation(async () => {
         attempts++;
         if (attempts < 2) {
           throw new Error('Connection failed');
         }
-        return originalConnect.call(prisma);
       });
 
       const result = await connectWithRetry(3, 50);
-      
+
       expect(result).toBe(true);
       expect(attempts).toBe(2);
-      
-      // Restore original method
-      prisma.$connect = originalConnect;
     });
   });
 

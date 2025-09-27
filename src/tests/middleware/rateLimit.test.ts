@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { Request, Response } from 'express';
-import { 
+import type { Request } from 'express';
+import {
   generalRateLimit,
   authRateLimit,
   uploadRateLimit,
   creationRateLimit,
   searchRateLimit,
   getRateLimit
-} from '@/middleware/rateLimit';
+} from '../../middleware/rateLimit';
 
 // Mock dependencies
 vi.mock('@/config/environment', () => ({
@@ -24,9 +24,24 @@ vi.mock('@/utils/logger', () => ({
   }
 }));
 
+type MockUser = {
+  id: string;
+  email: string;
+  role: string;
+};
+
+type MockRequest = {
+  path?: string;
+  ip?: string;
+  url?: string;
+  method?: string;
+  correlationId?: string;
+  get?: Request['get'];
+  user?: MockUser | undefined;
+};
+
 describe('Rate Limiting Middleware', () => {
-  let mockRequest: Partial<Request>;
-  let mockResponse: Partial<Response>;
+  let mockRequest: MockRequest;
 
   beforeEach(() => {
     mockRequest = {
@@ -37,12 +52,6 @@ describe('Rate Limiting Middleware', () => {
       correlationId: 'test-correlation-id',
       get: vi.fn(),
       user: undefined
-    };
-    
-    mockResponse = {
-      status: vi.fn().mockReturnThis(),
-      json: vi.fn().mockReturnThis(),
-      get: vi.fn()
     };
     
     vi.clearAllMocks();
@@ -61,7 +70,7 @@ describe('Rate Limiting Middleware', () => {
       // The skip function should return true for health check paths
       const skipFunction = (generalRateLimit as any).options?.skip;
       if (skipFunction) {
-        expect(skipFunction(mockRequest)).toBe(true);
+        expect(skipFunction(mockRequest as unknown as Request)).toBe(true);
       }
     });
 
@@ -70,7 +79,7 @@ describe('Rate Limiting Middleware', () => {
       
       const skipFunction = (generalRateLimit as any).options?.skip;
       if (skipFunction) {
-        expect(skipFunction(mockRequest)).toBe(false);
+        expect(skipFunction(mockRequest as unknown as Request)).toBe(false);
       }
     });
   });
@@ -146,7 +155,7 @@ describe('Rate Limiting Middleware', () => {
       // Test that the key generator would use user ID
       const keyGenerator = (generalRateLimit as any).options?.keyGenerator;
       if (keyGenerator) {
-        const key = keyGenerator(mockRequest);
+        const key = keyGenerator(mockRequest as unknown as Request);
         expect(key).toBe('user-123');
       }
     });
@@ -157,7 +166,7 @@ describe('Rate Limiting Middleware', () => {
 
       const keyGenerator = (generalRateLimit as any).options?.keyGenerator;
       if (keyGenerator) {
-        const key = keyGenerator(mockRequest);
+        const key = keyGenerator(mockRequest as unknown as Request);
         expect(key).toBe('192.168.1.1');
       }
     });

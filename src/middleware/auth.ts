@@ -5,18 +5,18 @@ import { AuthenticationError, AuthorizationError } from './errorHandler';
 import { logger } from '@/utils/logger';
 
 // Extend Request interface to include user information
-declare global {
-  namespace Express {
-    interface Request {
-      user?: {
-        id: string;
-        email: string;
-        role: string;
-        name?: string;
-      };
-    }
+declare module 'express-serve-static-core' {
+  interface Request {
+    user?: AuthenticatedUser;
   }
 }
+
+type AuthenticatedUser = {
+  id: string;
+  email: string;
+  role: string;
+  name?: string;
+};
 
 export interface JwtPayload {
   id: string;
@@ -33,7 +33,7 @@ export interface JwtPayload {
  */
 export const authenticateToken = (
   req: Request,
-  res: Response,
+  _res: Response,
   next: NextFunction
 ): void => {
   try {
@@ -55,12 +55,18 @@ export const authenticateToken = (
     const decoded = jwt.verify(token, config.jwt.secret) as JwtPayload;
     
     // Add user information to request
-    req.user = {
+    const userInfo: AuthenticatedUser = {
       id: decoded.id,
       email: decoded.email,
-      role: decoded.role,
-      name: decoded.name
+      role: decoded.role
     };
+    
+    // Only add name if it exists
+    if (decoded.name !== undefined) {
+      userInfo.name = decoded.name;
+    }
+    
+    req.user = userInfo;
 
     logger.debug('Authentication successful', {
       correlationId: req.correlationId,
@@ -106,7 +112,7 @@ export const authenticateToken = (
  */
 export const optionalAuth = (
   req: Request,
-  res: Response,
+  _res: Response,
   next: NextFunction
 ): void => {
   try {
@@ -115,12 +121,18 @@ export const optionalAuth = (
 
     if (token) {
       const decoded = jwt.verify(token, config.jwt.secret) as JwtPayload;
-      req.user = {
+      const userInfo: AuthenticatedUser = {
         id: decoded.id,
         email: decoded.email,
-        role: decoded.role,
-        name: decoded.name
+        role: decoded.role
       };
+      
+      // Only add name if it exists
+      if (decoded.name !== undefined) {
+        userInfo.name = decoded.name;
+      }
+      
+      req.user = userInfo;
     }
   } catch (error) {
     // Silently ignore authentication errors for optional auth
@@ -140,7 +152,7 @@ export const optionalAuth = (
 export const requireRole = (allowedRoles: string | string[]) => {
   const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
   
-  return (req: Request, res: Response, next: NextFunction): void => {
+  return (req: Request, _res: Response, next: NextFunction): void => {
     if (!req.user) {
       logger.warn('Authorization failed: No user in request', {
         correlationId: req.correlationId,
@@ -188,10 +200,10 @@ export const requireUserOrAdmin = requireRole(['user', 'admin']);
  */
 export const generateToken = (payload: Omit<JwtPayload, 'iat' | 'exp'>): string => {
   return jwt.sign(payload, config.jwt.secret, {
-    expiresIn: config.jwt.expiresIn,
+    expiresIn: config.jwt.expiresIn as string | number,
     issuer: 'courtflow-api',
     audience: 'courtflow-client'
-  });
+  } as jwt.SignOptions);
 };
 
 /**
@@ -199,10 +211,10 @@ export const generateToken = (payload: Omit<JwtPayload, 'iat' | 'exp'>): string 
  */
 export const generateRefreshToken = (payload: Omit<JwtPayload, 'iat' | 'exp'>): string => {
   return jwt.sign(payload, config.jwt.secret, {
-    expiresIn: config.jwt.refreshExpiresIn,
+    expiresIn: config.jwt.refreshExpiresIn as string | number,
     issuer: 'courtflow-api',
     audience: 'courtflow-client'
-  });
+  } as jwt.SignOptions);
 };
 
 /**

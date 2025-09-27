@@ -1,3 +1,4 @@
+import os from 'node:os';
 import { Request, Response, NextFunction } from 'express';
 import { healthChecker } from '@/utils/health-check';
 import { config } from '@/config/environment';
@@ -25,7 +26,7 @@ class SystemController {
     }
   }
 
-  async detailedHealthCheck(_req: Request, res: Response, next: NextFunction): Promise<void> {
+  async detailedHealthCheck(_req: Request, res: Response, _next: NextFunction): Promise<void> {
     try {
       const healthResult = await healthChecker.performHealthCheck();
       
@@ -69,9 +70,9 @@ class SystemController {
         },
         uptime: process.uptime(),
         timestamp: new Date().toISOString(),
-        loadAverage: require('os').loadavg(),
-        freeMemory: require('os').freemem(),
-        totalMemory: require('os').totalmem(),
+        loadAverage: os.loadavg(),
+        freeMemory: os.freemem(),
+        totalMemory: os.totalmem(),
       };
 
       // Return Prometheus format if requested
@@ -89,24 +90,20 @@ class SystemController {
     }
   }
 
-  async version(_req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const version = {
-        name: 'CourtFlow Backend API',
-        version: healthChecker.getVersion(),
-        apiVersion: config.api.version,
-        nodeVersion: process.version,
-        environment: healthChecker.getEnvironment(),
-        uptime: healthChecker.getUptime(),
-        buildDate: new Date().toISOString(),
-        platform: process.platform,
-        arch: process.arch,
-      };
+  version(_req: Request, res: Response): void {
+    const version = {
+      name: 'CourtFlow Backend API',
+      version: healthChecker.getVersion(),
+      apiVersion: config.api.version,
+      nodeVersion: process.version,
+      environment: healthChecker.getEnvironment(),
+      uptime: healthChecker.getUptime(),
+      buildDate: new Date().toISOString(),
+      platform: process.platform,
+      arch: process.arch,
+    };
 
-      res.status(200).json(version);
-    } catch (error) {
-      next(error);
-    }
+    res.status(200).json(version);
   }
 }
 
