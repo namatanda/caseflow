@@ -90,20 +90,24 @@ class SystemController {
     }
   }
 
-  version(_req: Request, res: Response): void {
-    const version = {
-      name: 'CourtFlow Backend API',
-      version: healthChecker.getVersion(),
-      apiVersion: config.api.version,
-      nodeVersion: process.version,
-      environment: healthChecker.getEnvironment(),
-      uptime: healthChecker.getUptime(),
-      buildDate: new Date().toISOString(),
-      platform: process.platform,
-      arch: process.arch,
-    };
+  version(_req: Request, res: Response, next: NextFunction): void {
+    try {
+      const version = {
+        name: 'CourtFlow Backend API',
+        version: healthChecker.getVersion(),
+        apiVersion: config.api.version,
+        nodeVersion: process.version,
+        environment: healthChecker.getEnvironment(),
+        uptime: healthChecker.getUptime(),
+        buildDate: new Date().toISOString(),
+        platform: process.platform,
+        arch: process.arch,
+      };
 
-    res.status(200).json(version);
+      res.status(200).json(version);
+    } catch (error) {
+      next(error);
+    }
   }
 }
 

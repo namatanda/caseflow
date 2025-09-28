@@ -2,6 +2,8 @@
 
 ## Phase 1: Backend API Foundation
 
+**Note**: Tasks 5.1 and 5.2 must be completed before any endpoint implementation tasks (7-11) can begin, as they provide the required repositories and services.
+
 - [x] 1. Create new branch for frontend-backend decoupling migration
 
 
@@ -50,12 +52,18 @@
   - Create database migration scripts for backend
   - _Requirements: 1.2, 1.6, 6.5_
 
-- [ ] 5. Create base repository and service patterns
+- [x] 5. Create base repository and service patterns
   - Implement base repository class with common CRUD operations
   - Create service layer interfaces and base classes
   - Set up dependency injection container for services
   - Implement transaction handling utilities
   - Create data validation utilities using Zod schemas
+  - _Requirements: 1.5, 8.8_
+
+- [ ] 5.1 Implement all domain repositories
+  - _Requirements: 1.5, 6.1, 6.2_
+
+- [ ] 5.2 Implement all domain services
   - _Requirements: 1.5, 8.8_
 
 ## Phase 2: Authentication and Authorization System
@@ -69,7 +77,7 @@
   - _Requirements: 1.4, 5.1, 5.2, 5.3_
 
 - [ ] 7. Create user management endpoints
-  - Implement GET /api/v1/auth/me endpoint for user profile
+  - Implement GET /api/v1/auth/me endpoint for user profile using UserService
   - Create user role-based authorization middleware
   - Implement user session management with Redis
   - Add user activity logging for security auditing
@@ -79,33 +87,33 @@
 ## Phase 3: Core API Endpoints Migration
 
 - [ ] 8. Migrate dashboard analytics endpoints
-  - Create GET /api/v1/dashboard/analytics endpoint
-  - Migrate dashboard analytics service from Next.js to Express
+  - Create GET /api/v1/dashboard/analytics endpoint using CaseService and CourtService
+  - Migrate dashboard analytics logic from Next.js to Express controllers
   - Implement caching layer using Redis for dashboard data
-  - Create GET /api/v1/dashboard/recent-activity endpoint
+  - Create GET /api/v1/dashboard/recent-activity endpoint using CaseActivityService
   - Add filtering and pagination support for analytics
   - _Requirements: 6.1, 6.2, 6.5, 10.1_
 
 - [ ] 9. Migrate case management endpoints
-  - Create GET /api/v1/cases endpoint with filtering and pagination
-  - Implement GET /api/v1/cases/:id endpoint for case details
-  - Create POST /api/v1/cases endpoint for case creation
-  - Implement PUT /api/v1/cases/:id endpoint for case updates
-  - Add DELETE /api/v1/cases/:id endpoint for case deletion
+  - Create GET /api/v1/cases endpoint using CaseService with filtering and pagination
+  - Implement GET /api/v1/cases/:id endpoint for case details using CaseService
+  - Create POST /api/v1/cases endpoint for case creation using CaseService validation
+  - Implement PUT /api/v1/cases/:id endpoint for case updates using CaseService
+  - Add DELETE /api/v1/cases/:id endpoint for case deletion using CaseService
   - _Requirements: 6.1, 6.2, 6.4_
 
 - [ ] 10. Migrate data import system endpoints
-  - Create POST /api/v1/import/upload endpoint for CSV file uploads
-  - Implement GET /api/v1/import/status/:batchId for import progress
-  - Create GET /api/v1/import/history endpoint for import history
-  - Migrate BullMQ job processing to standalone backend
+  - Create POST /api/v1/import/upload endpoint using ImportService for CSV file uploads
+  - Implement GET /api/v1/import/status/:batchId using ImportService for import progress
+  - Create GET /api/v1/import/history endpoint using ImportService for import history
+  - Migrate BullMQ job processing to standalone backend using ImportService
   - Implement real-time progress updates via WebSocket or polling
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
 
 - [ ] 11. Create system and health endpoints
-  - Implement GET /api/v1/system/health with comprehensive health checks
-  - Create GET /api/v1/system/metrics endpoint for Prometheus metrics
-  - Add GET /api/v1/system/version endpoint for version information
+  - Implement GET /api/v1/system/health using SystemService with comprehensive health checks
+  - Create GET /api/v1/system/metrics endpoint using SystemService for Prometheus metrics
+  - Add GET /api/v1/system/version endpoint using SystemService for version information
   - Implement detailed health checks for database, Redis, and external services
   - Create monitoring endpoints for application performance metrics
   - _Requirements: 7.5, 7.7, 10.3, 10.4_
@@ -146,12 +154,12 @@
   - Implement request queuing for offline scenarios
   - _Requirements: 2.6, 3.2, 3.5, 3.6_
 
-- [ ] 16. Create typed service clients
-  - Implement DashboardService with typed methods for analytics endpoints
-  - Create CaseService for case management operations
-  - Implement ImportService for data import functionality
-  - Create AuthService for authentication operations
-  - Add SystemService for health checks and system information
+- [ ] 16. Create typed API client services
+  - Implement DashboardApiClient with typed methods for analytics endpoints
+  - Create CaseApiClient for case management operations
+  - Implement ImportApiClient for data import functionality
+  - Create AuthApiClient for authentication operations
+  - Add SystemApiClient for health checks and system information
   - _Requirements: 3.1, 3.9, 8.6, 8.7_
 
 ## Phase 6: Frontend Application Migration

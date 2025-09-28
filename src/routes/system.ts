@@ -40,6 +40,9 @@ router.get(
 );
 
 // Version information
-router.get('/version', (req, res) => systemController.version(req, res));
+router.get(
+	'/version',
+	asyncHandler((req, res, next) => systemController.version(req, res, next))
+);
 
 export { router as systemRoutes };

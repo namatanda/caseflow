@@ -60,7 +60,8 @@ const sanitizeInPlace = (value: unknown): void => {
 };
 
 const extractClientIp = (req: Request): string => {
-  const forwarded = req.headers['x-forwarded-for'];
+  const headers = req.headers ?? {};
+  const forwarded = headers['x-forwarded-for'];
 
   if (typeof forwarded === 'string') {
     return forwarded.split(',')[0]?.trim() ?? '';
@@ -70,7 +71,10 @@ const extractClientIp = (req: Request): string => {
     return forwarded[0]?.trim() ?? '';
   }
 
-  return req.ip || req.socket.remoteAddress || '';
+  const socketAddress = req.socket?.remoteAddress;
+  const connectionAddress = (req as Partial<Request> & { connection?: { remoteAddress?: string } }).connection?.remoteAddress;
+
+  return req.ip || socketAddress || connectionAddress || '';
 };
 
 export const securityHeaders = helmet({
