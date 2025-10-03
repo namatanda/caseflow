@@ -1,18 +1,17 @@
 generator client {
   provider = "prisma-client-js"
-  output   = "../node_modules/.prisma/client"
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
   directUrl = env("DIRECT_DATABASE_URL")
 }
 
 model Court {
-  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.VarChar(36)
-  courtName String    @map("court_name") @db.VarChar(255)
-  courtCode String    @unique @map("court_code") @db.VarChar(50)
+  id        String    @id @default(uuid()) 
+  courtName String    @map("court_name") 
+  courtCode String    @unique @map("court_code") 
   courtType CourtType @map("court_type")
   isActive  Boolean   @default(true) @map("is_active")
   createdAt DateTime  @default(now()) @map("created_at")
@@ -27,9 +26,9 @@ model Court {
 
 model Judge {
   id              String                @id @default(uuid())
-  fullName        String                @map("full_name") @db.VarChar(255)
-  firstName       String                @map("first_name") @db.VarChar(100)
-  lastName        String                @map("last_name") @db.VarChar(100)
+  fullName        String                @map("full_name") 
+  firstName       String                @map("first_name") 
+  lastName        String                @map("last_name") 
   isActive        Boolean               @default(true) @map("is_active")
   createdAt       DateTime              @default(now()) @map("created_at")
   updatedAt       DateTime              @updatedAt @map("updated_at")
@@ -44,8 +43,8 @@ model Judge {
 
 model CaseType {
   id           String   @id @default(uuid())
-  caseTypeName String   @map("case_type_name") @db.VarChar(100)
-  caseTypeCode String   @unique @map("case_type_code") @db.VarChar(20)
+  caseTypeName String   @map("case_type_name") 
+  caseTypeCode String   @unique @map("case_type_code") 
   description  String?
   isActive     Boolean  @default(true) @map("is_active")
   createdAt    DateTime @default(now()) @map("created_at")
@@ -58,22 +57,22 @@ model CaseType {
 
 model Case {
   id                     String                @id @default(uuid())
-  caseNumber             String                @map("case_number") @db.VarChar(50)
-  courtName              String                @map("court_name") @db.VarChar(255)
-  originalCourtId        String?               @map("original_court_id") @db.VarChar(36)
+  caseNumber             String                @map("case_number") 
+  courtName              String                @map("court_name") 
+  originalCourtId        String?               @map("original_court_id") 
   caseTypeId             String                @map("case_type_id")
-  filedDate              DateTime              @map("filed_date") @db.Date
-  originalCaseNumber     String?               @map("original_case_number") @db.VarChar(50)
+  filedDate              DateTime              @map("filed_date") 
+  originalCaseNumber     String?               @map("original_case_number") 
   originalYear           Int?                  @map("original_year")
-  parties                Json
+  parties                String
   status                 CaseStatus            @default(ACTIVE)
-  lastActivityDate       DateTime?             @map("last_activity_date")
+  lastActivityDate       DateTime?             @map("next_activity_date")
   totalActivities        Int                   @default(0) @map("total_activities")
   hasLegalRepresentation Boolean               @default(false) @map("has_legal_representation")
   createdAt              DateTime              @default(now()) @map("created_at")
   updatedAt              DateTime              @updatedAt @map("updated_at")
-  caseidType             String?               @map("caseid_type") @db.VarChar(20)
-  caseidNo               String?               @map("caseid_no") @db.VarChar(50)
+  caseidType             String?               @map("caseid_type") 
+  caseidNo               String?               @map("caseid_no") 
   maleApplicant          Int?                  @default(0) @map("male_applicant")
   femaleApplicant        Int?                  @default(0) @map("female_applicant")
   organizationApplicant  Int?                  @default(0) @map("organization_applicant")
@@ -106,11 +105,11 @@ model Case {
 model CaseActivity {
   id                     String           @id @default(uuid())
   caseId                 String           @map("case_id")
-  activityDate           DateTime         @map("activity_date") @db.Date
-  activityType           String           @map("activity_type") @db.VarChar(100)
-  outcome                String           @db.VarChar(100)
+  activityDate           DateTime         @map("activity_date") 
+  activityType           String           @map("activity_type") 
+  outcome                String           
   reasonForAdjournment   String?          @map("reason_for_adjournment")
-  nextHearingDate        DateTime?        @map("next_hearing_date") @db.Date
+  nextHearingDate        DateTime?        @map("next_hearing_date") 
   primaryJudgeId         String           @map("primary_judge_id")
   hasLegalRepresentation Boolean          @map("has_legal_representation")
   applicantWitnesses     Int              @default(0) @map("applicant_witnesses")
@@ -119,15 +118,15 @@ model CaseActivity {
   details                String?
   importBatchId          String           @map("import_batch_id")
   createdAt              DateTime         @default(now()) @map("created_at")
-  judge1                 String?          @map("judge_1") @db.VarChar(255)
-  judge2                 String?          @map("judge_2") @db.VarChar(255)
-  judge3                 String?          @map("judge_3") @db.VarChar(255)
-  judge4                 String?          @map("judge_4") @db.VarChar(255)
-  judge5                 String?          @map("judge_5") @db.VarChar(255)
-  judge6                 String?          @map("judge_6") @db.VarChar(255)
-  judge7                 String?          @map("judge_7") @db.VarChar(255)
-  comingFor              String?          @map("coming_for") @db.VarChar(100)
-  legalRepString         String?          @map("legal_rep_string") @db.VarChar(10)
+  judge1                 String?          @map("judge_1") 
+  judge2                 String?          @map("judge_2") 
+  judge3                 String?          @map("judge_3") 
+  judge4                 String?          @map("judge_4") 
+  judge5                 String?          @map("judge_5") 
+  judge6                 String?          @map("judge_6") 
+  judge7                 String?          @map("judge_7") 
+  comingFor              String?          @map("coming_for") 
+  legalRepString         String?          @map("legal_rep_string") 
   custodyNumeric         Int?             @map("custody_numeric")
   otherDetails           String?          @map("other_details")
   case                   Case             @relation(fields: [caseId], references: [id], onDelete: Cascade)
@@ -170,22 +169,22 @@ model CaseJudgeAssignment {
 
 model DailyImportBatch {
   id                      String              @id @default(uuid())
-  importDate              DateTime            @map("import_date") @db.Date
-  filename                String              @db.VarChar(255)
+  importDate              DateTime            @map("import_date") 
+  filename                String              
   fileSize                Int                 @map("file_size")
-  fileChecksum            String              @map("file_checksum") @db.VarChar(64)
+  fileChecksum            String              @map("file_checksum") 
   totalRecords            Int                 @map("total_records")
   successfulRecords       Int                 @map("successful_records")
   failedRecords           Int                 @map("failed_records")
-  errorLogs               Json                @map("error_logs")
+  errorLogs               String              @map("error_logs")
   status                  ImportStatus
   createdAt               DateTime            @default(now()) @map("created_at")
   completedAt             DateTime?           @map("completed_at")
   createdBy               String              @map("created_by")
   estimatedCompletionTime DateTime?           @map("estimated_completion_time")
   processingStartTime     DateTime?           @map("processing_start_time")
-  userConfig              Json                @default("{}") @map("user_config")
-  validationWarnings      Json                @default("[]") @map("validation_warnings")
+  userConfig              String              @default("{}") @map("user_config")
+  validationWarnings      String              @default("[]") @map("validation_warnings")
   emptyRowsSkipped        Int?                @default(0) @map("empty_rows_skipped")
   activities              CaseActivity[]
   user                    User                @relation(fields: [createdBy], references: [id])
@@ -200,8 +199,8 @@ model DailyImportBatch {
 
 model User {
   id            String             @id @default(uuid())
-  email         String             @unique @db.VarChar(255)
-  name          String             @db.VarChar(255)
+  email         String             @unique 
+  name          String             
   role          UserRole           @default(DATA_ENTRY)
   isActive      Boolean            @default(true) @map("is_active")
   createdAt     DateTime           @default(now()) @map("created_at")
@@ -218,7 +217,7 @@ model ImportErrorDetail {
   id           String           @id @default(uuid())
   batchId      String
   rowNumber    Int
-  errorType    String           @db.VarChar(100)
+  errorType    String           
   errorMessage String
   severity     ErrorSeverity
   createdAt    DateTime         @default(now())

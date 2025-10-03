@@ -19,7 +19,6 @@ export interface CaseCsvImportPayload {
 
 export interface CaseCsvImportOptions {
   chunkSize?: number;
-  skipDuplicates?: boolean;
 }
 
 export interface CaseCsvExportOptions {
@@ -33,7 +32,7 @@ export class CaseCsvService extends BaseService<CaseRepository> {
   }
 
   async importCaseData(payload: CaseCsvImportPayload, options: CaseCsvImportOptions = {}) {
-    const { chunkSize = 500, skipDuplicates = true } = options;
+    const { chunkSize = 500 } = options;
 
     return this.runInTransaction(async (tx) => {
       const transactionalCaseRepo = new CaseRepository(tx.case);
@@ -45,20 +44,20 @@ export class CaseCsvService extends BaseService<CaseRepository> {
       let createdAssignments = 0;
 
       for (const chunk of chunkArray(payload.cases, chunkSize)) {
-        const result = await transactionalCaseRepo.createMany(chunk, { skipDuplicates });
+        const result = await transactionalCaseRepo.createMany(chunk);
         createdCases += result.count;
       }
 
       if (payload.activities?.length) {
         for (const chunk of chunkArray(payload.activities, chunkSize)) {
-          const result = await transactionalActivityRepo.createMany(chunk, { skipDuplicates });
+          const result = await transactionalActivityRepo.createMany(chunk);
           createdActivities += result.count;
         }
       }
 
       if (payload.assignments?.length) {
         for (const chunk of chunkArray(payload.assignments, chunkSize)) {
-          const result = await transactionalAssignmentRepo.createMany(chunk, { skipDuplicates });
+          const result = await transactionalAssignmentRepo.createMany(chunk);
           createdAssignments += result.count;
         }
       }

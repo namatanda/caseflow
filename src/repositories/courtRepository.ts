@@ -48,8 +48,8 @@ export class CourtRepository extends BaseRepository<CourtDelegate> {
     return this.findMany({
       where: {
         OR: [
-          { courtName: { contains: term, mode: 'insensitive' } },
-          { courtCode: { contains: term, mode: 'insensitive' } },
+          { courtName: { contains: term } },
+          { courtCode: { contains: term } },
         ],
         isActive: true,
       },

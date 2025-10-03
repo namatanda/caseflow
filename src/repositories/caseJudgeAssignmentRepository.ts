@@ -51,14 +51,13 @@ export class CaseJudgeAssignmentRepository extends BaseRepository<CaseJudgeAssig
     });
   }
 
-  async createMany(records: Prisma.CaseJudgeAssignmentCreateManyInput[], options: { skipDuplicates?: boolean } = {}) {
+  async createMany(records: Prisma.CaseJudgeAssignmentCreateManyInput[]) {
     if (records.length === 0) {
       return { count: 0 };
     }
 
     return this.delegate.createMany({
       data: records,
-      skipDuplicates: options.skipDuplicates ?? true,
     });
   }
 }

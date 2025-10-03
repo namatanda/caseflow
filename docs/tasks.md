@@ -42,10 +42,10 @@
   - Create data validation utilities using Zod schemas
   - _Requirements: 1.5, 8.8_
 
-- [ ] 5.1 Implement all domain repositories
+- [x] 5.1 Implement all domain repositories
   - _Requirements: 1.5, 6.1, 6.2_
 
-- [ ] 5.2 Implement all domain services
+- [x] 5.2 Implement all domain services
   - _Requirements: 1.5, 8.8_
 
 ## Phase 2: Authentication and Authorization System

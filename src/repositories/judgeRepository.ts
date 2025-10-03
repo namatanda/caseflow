@@ -41,9 +41,9 @@ export class JudgeRepository extends BaseRepository<JudgeDelegate> {
       where: {
         isActive: true,
         OR: [
-          { fullName: { contains: query, mode: 'insensitive' } },
-          { firstName: { contains: query, mode: 'insensitive' } },
-          { lastName: { contains: query, mode: 'insensitive' } },
+          { fullName: { contains: query } },
+          { firstName: { contains: query } },
+          { lastName: { contains: query } },
         ],
       },
       take: 25,

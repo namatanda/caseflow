@@ -1,6 +1,6 @@
 # CourtFlow Backend Service
 
-CourtFlow Backend is a TypeScript-powered Express API that backs the CourtFlow performance dashboard. It delivers secure REST endpoints, orchestrates PostgreSQL data via Prisma, manages Redis-backed caching and sessions, and ships with first-class observability (structured logging, health probes, Prometheus metrics) plus hardened security middleware.
+CourtFlow Backend is a TypeScript-powered Express API that backs the CourtFlow performance dashboard. It delivers secure REST endpoints, orchestrates data via Prisma (SQLite for local development, PostgreSQL for Docker/production), manages Redis-backed caching and sessions, and ships with first-class observability (structured logging, health probes, Prometheus metrics) plus hardened security middleware.
 
 ---
 
@@ -14,7 +14,7 @@ CourtFlow Backend is a TypeScript-powered Express API that backs the CourtFlow p
   - [Quality Gates](#quality-gates)
   - [Frequently Used Scripts](#frequently-used-scripts)
 - [Environment Configuration](#environment-configuration)
-- [Data Layer (PostgreSQL + Prisma)](#data-layer-postgresql--prisma)
+- [Data Layer (SQLite/PostgreSQL + Prisma)](#data-layer-sqlitepostgresql--prisma)
 - [Caching & Sessions (Redis)](#caching--sessions-redis)
 - [Health & Observability](#health--observability)
 - [Security](#security)
@@ -29,21 +29,21 @@ CourtFlow Backend is a TypeScript-powered Express API that backs the CourtFlow p
 ### Prerequisites
 - Node.js **>= 18** (see `package.json` engines field)
 - npm **>= 9**
-- Docker & Docker Compose (optional, for local infrastructure)
-- PostgreSQL and Redis instances (local or via Docker)
+- Docker & Docker Compose (for Docker-based development with PostgreSQL)
+- SQLite (built-in, used for local development), PostgreSQL (for Docker/production), and Redis instances
 
 ### Installation
 ```bash
 # install dependencies
 npm install
 
-# (optional) launch postgres + redis
-docker compose up -d
+# (optional) launch postgres + redis for Docker development
+docker compose -f docker-compose.dev.yml up -d
 
 # copy and adjust env vars
-cp .env.example .env.local   # if template exists
+cp .env.example .env   # SQLite is used by default for local development
 ```
-> If `.env.example` is absent, create `.env.local` manually using the variables listed in [Environment Configuration](#environment-configuration).
+> If `.env.example` is absent, create `.env` manually using the variables listed in [Environment Configuration](#environment-configuration). Local development uses SQLite (zero-config), while Docker development uses PostgreSQL.
 
 ### Running Locally
 ```bash
@@ -59,11 +59,12 @@ The service listens on the `PORT` value (defaults to **3001**). Versioned REST r
 
 ## Architecture Overview
 - **Runtime**: Express.js + TypeScript (strict lint + typecheck gates)
-- **Database**: PostgreSQL managed via Prisma Client
+- **Database**: SQLite for development/testing, PostgreSQL for production, both managed via Prisma Client
 - **Caching / Sessions**: Redis with dedicated clients for general cache, sessions, and background processing
 - **Queues**: BullMQ built on Redis
 - **Observability**: Prometheus metrics, rich health checks, Winston-based structured logging
 - **Testing**: Vitest suites spanning configuration, controllers, middleware, routes, and utilities
+- Detailed layering guide: [docs/backend-architecture.md](docs/backend-architecture.md)
 
 ---
 
@@ -84,6 +85,7 @@ npm run build          # compile TypeScript + tsc-alias
 npm run lint:fix       # apply lint autofixes
 npm run test:watch     # interactive test watcher
 npm run test:coverage  # coverage report
+npm run test:integration # run integration tests
 npm run db:generate    # prisma client generation
 npm run migrate:dev    # run prisma migration (development)
 npm run db:seed:dev    # populate development seed data
@@ -93,11 +95,11 @@ Additional migration/seed scripts exist for staging and production environments 
 ---
 
 ## Environment Configuration
-Create `.env.local` (or set shell variables) with at least:
+Create `.env` (or set shell variables) with at least:
 ```env
-# Database
-DATABASE_URL="postgresql://username:password@localhost:5432/courtflow_db"
-DIRECT_DATABASE_URL="postgresql://username:password@localhost:5432/courtflow_db"
+# Database (SQLite for development, PostgreSQL for production)
+DATABASE_URL="file:./dev.db"
+DIRECT_DATABASE_URL="file:./dev.db"
 
 # Redis
 REDIS_URL="redis://localhost:6379"
@@ -112,11 +114,12 @@ NODE_ENV="development"
 PORT=3001
 ALLOWED_ORIGINS="http://localhost:3000,http://localhost:9002"
 ```
-> Production deployments should provide secure values via a secrets manager or environment-specific configuration system.
+> Production deployments should use PostgreSQL and provide secure values via a secrets manager or environment-specific configuration system.
 
 ---
 
-## Data Layer (PostgreSQL + Prisma)
+## Data Layer (SQLite/PostgreSQL + Prisma)
+- SQLite for development/testing (file-based, zero-config), PostgreSQL for production
 - Connection pooling, retry logic, and health diagnostics baked in
 - Transaction helpers with retry-on-deadlock semantics
 - Automated migration scripts (`migrate:*`) and generation (`db:generate`)

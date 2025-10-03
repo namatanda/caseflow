@@ -24,7 +24,6 @@ export class ImportErrorDetailRepository extends BaseRepository<ImportErrorDetai
 
     return this.delegate.createMany({
       data: details,
-      skipDuplicates: true,
     });
   }
 }

@@ -148,7 +148,7 @@ class DatabaseSeeder {
 
       await prisma.court.createMany({
         data: courts,
-        skipDuplicates: true,
+        
       });
 
       logger.info(`Seeded ${courts.length} courts`);
@@ -207,7 +207,7 @@ class DatabaseSeeder {
 
       await prisma.caseType.createMany({
         data: caseTypes,
-        skipDuplicates: true,
+        
       });
 
       logger.info(`Seeded ${caseTypes.length} case types`);
@@ -266,7 +266,7 @@ class DatabaseSeeder {
 
       await prisma.judge.createMany({
         data: judges,
-        skipDuplicates: true,
+        
       });
 
       logger.info(`Seeded ${judges.length} judges`);
@@ -316,7 +316,7 @@ class DatabaseSeeder {
 
       await prisma.user.createMany({
         data: users,
-        skipDuplicates: true,
+        
       });
 
       logger.info(`Seeded ${users.length} users`);
@@ -371,7 +371,7 @@ class DatabaseSeeder {
 
       await prisma.case.createMany({
         data: sampleCases,
-        skipDuplicates: true,
+        
       });
 
       logger.info(`Seeded ${sampleCases.length} sample cases`);

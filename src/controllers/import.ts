@@ -263,9 +263,6 @@ export class ImportController {
       if (typeof options['chunkSize'] === 'number') {
         processOptions.chunkSize = options['chunkSize'];
       }
-      if (typeof options['skipDuplicates'] === 'boolean') {
-        processOptions.skipDuplicates = options['skipDuplicates'];
-      }
       const totalsOptions = options['totals'];
       if (totalsOptions) {
         const totals: NonNullable<ProcessCsvBatchOptions['totals']> = {

@@ -48,9 +48,9 @@ export class DailyImportBatchService extends BaseService<DailyImportBatchReposit
           status: ImportStatus.COMPLETED,
           successfulRecords: options.successfulRecords,
           failedRecords: options.failedRecords,
-          errorLogs: options.errorLogs ?? [],
+          errorLogs: JSON.stringify(options.errorLogs ?? []),
           completedAt: options.completedAt ?? new Date(),
-          validationWarnings: options.validationWarnings ?? [],
+          validationWarnings: JSON.stringify(options.validationWarnings ?? []),
         },
       });
 
@@ -70,7 +70,7 @@ export class DailyImportBatchService extends BaseService<DailyImportBatchReposit
           where: { id: batchId },
           data: {
             status: ImportStatus.FAILED,
-            errorLogs,
+            errorLogs: JSON.stringify(errorLogs),
             completedAt: new Date(),
           },
         })

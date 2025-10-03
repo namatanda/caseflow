@@ -47,14 +47,13 @@ export class CaseRepository extends BaseRepository<CaseDelegate> {
     });
   }
 
-  async createMany(records: Prisma.CaseCreateManyInput[], options: { skipDuplicates?: boolean } = {}) {
+  async createMany(records: Prisma.CaseCreateManyInput[]) {
     if (records.length === 0) {
       return { count: 0 };
     }
 
     return this.delegate.createMany({
       data: records,
-      skipDuplicates: options.skipDuplicates ?? true,
     });
   }
 

@@ -37,7 +37,8 @@ export interface MarkBatchProcessingOptions {
   estimatedCompletionTime?: Date;
 }
 
-export interface ProcessCsvBatchOptions extends CaseCsvImportOptions {
+export interface ProcessCsvBatchOptions {
+  chunkSize?: number;
   totals?: {
     totalRecords: number;
     failedRecords?: number;
@@ -75,13 +76,13 @@ export class ImportService extends BaseService<DailyImportBatchRepository> {
             totalRecords: input.totalRecords,
             successfulRecords: 0,
             failedRecords: 0,
-            errorLogs: [],
+            errorLogs: '[]',
             status: ImportStatus.PENDING,
             createdBy: input.createdBy,
             estimatedCompletionTime: input.estimatedCompletionTime ?? null,
             processingStartTime: null,
-            userConfig: input.userConfig ?? {},
-            validationWarnings: input.validationWarnings ?? [],
+            userConfig: JSON.stringify(input.userConfig ?? {}),
+            validationWarnings: JSON.stringify(input.validationWarnings ?? []),
             emptyRowsSkipped: input.emptyRowsSkipped ?? 0,
           },
         } satisfies Prisma.DailyImportBatchCreateArgs
@@ -109,14 +110,11 @@ export class ImportService extends BaseService<DailyImportBatchRepository> {
     payload: CaseCsvImportPayload,
     options: ProcessCsvBatchOptions = {}
   ) {
-    const { chunkSize, skipDuplicates, totals, errorDetails, errorLogs, validationWarnings, completedAt } = options;
+    const { chunkSize, totals, errorDetails, errorLogs, validationWarnings, completedAt } = options;
 
     const importOptions: CaseCsvImportOptions = {};
     if (typeof chunkSize === 'number') {
       importOptions.chunkSize = chunkSize;
-    }
-    if (typeof skipDuplicates === 'boolean') {
-      importOptions.skipDuplicates = skipDuplicates;
     }
 
     const importResult = await this.csvService.importCaseData(payload, importOptions);

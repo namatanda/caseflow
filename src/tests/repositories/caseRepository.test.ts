@@ -1,19 +1,22 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 
-import { CaseRepository } from '@/repositories/caseRepository';
+import { CaseRepository } from '../../repositories/caseRepository';
+
+import { createInMemoryCrudDelegate } from '../mocks/inMemoryCrudDelegate';
+
+type CaseEntity = {
+  id: string;
+  caseNumber: string;
+  courtName: string;
+  filedDate: Date;
+  caseTypeId: string;
+};
 
 describe('CaseRepository', () => {
-  const delegate = {
-    createMany: vi.fn(),
-    findUnique: vi.fn(),
-    findMany: vi.fn(),
-    update: vi.fn(),
-    delete: vi.fn(),
-    count: vi.fn(),
-  } as any;
+  const delegate = createInMemoryCrudDelegate<CaseEntity>();
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    delegate.reset();
   });
 
   it('returns zero count when createMany receives no records', async () => {
@@ -23,23 +26,23 @@ describe('CaseRepository', () => {
 
     expect(result).toEqual({ count: 0 });
     expect(delegate.createMany).not.toHaveBeenCalled();
+    expect(delegate.store).toEqual([]);
   });
 
-  it('uses skipDuplicates by default during bulk inserts', async () => {
+  it('creates multiple records during bulk inserts', async () => {
     const repository = new CaseRepository(delegate);
-    delegate.createMany.mockResolvedValue({ count: 2 });
 
     const records = [
-      { id: 'case-1', caseNumber: 'CASE-1', courtName: 'Central', filedDate: new Date(), caseTypeId: 'type-1' },
-      { id: 'case-2', caseNumber: 'CASE-2', courtName: 'Central', filedDate: new Date(), caseTypeId: 'type-1' },
+      { id: 'case-1', caseNumber: 'CASE-1', courtName: 'Central', filedDate: new Date(), caseTypeId: 'type-1', parties: JSON.stringify({ applicants: [], defendants: [] }) },
+      { id: 'case-2', caseNumber: 'CASE-2', courtName: 'Central', filedDate: new Date(), caseTypeId: 'type-1', parties: JSON.stringify({ applicants: [], defendants: [] }) },
     ];
 
     const result = await repository.createMany(records);
 
     expect(delegate.createMany).toHaveBeenCalledWith({
       data: records,
-      skipDuplicates: true,
     });
     expect(result).toEqual({ count: 2 });
+    expect(delegate.store).toEqual(records);
   });
 });
