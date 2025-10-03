@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { BaseRepository, TransactionClient } from '@/repositories/baseRepository';
 import { createLogger } from '@/utils/logger';
 import { ServiceError } from './errors';

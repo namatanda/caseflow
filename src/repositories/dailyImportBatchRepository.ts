@@ -31,7 +31,7 @@ export class DailyImportBatchRepository extends BaseRepository<DailyImportBatchD
     } satisfies Prisma.DailyImportBatchFindManyArgs);
   }
 
-  findById(id: string, options: { includeErrorDetails?: boolean } = {}) {
+  findByIdWithDetails(id: string, options: { includeErrorDetails?: boolean } = {}) {
     const include = options.includeErrorDetails
       ? { user: true, errorDetails: true }
       : { user: true, errorDetails: false };

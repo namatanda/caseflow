@@ -33,7 +33,7 @@ export class DailyImportBatchService extends BaseService<DailyImportBatchReposit
   }
 
   getBatchById(id: string, options: { includeErrorDetails?: boolean } = {}) {
-    return this.execute(() => this.repository.findById(id, options));
+    return this.execute(() => this.repository.findByIdWithDetails(id, options));
   }
 
   completeBatch(

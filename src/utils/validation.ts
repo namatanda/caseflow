@@ -1,5 +1,4 @@
-import type { ZodIssue, ZodSchema, ZodTypeAny } from 'zod';
-import { ZodError } from 'zod';
+import type { ZodIssue, ZodType, ZodTypeDef } from 'zod';
 import { ValidationError } from '@/services';
 
 export interface ValidationResult<T> {
@@ -21,7 +20,10 @@ export const formatIssues = (issues: ZodIssue[]): FormattedIssue[] =>
     code: issue.code,
   }));
 
-export const validateSchema = <T extends ZodTypeAny>(schema: T, data: unknown): ValidationResult<ReturnType<T['parse']>> => {
+export const validateSchema = <Output, Input, Schema extends ZodType<Output, ZodTypeDef, Input>>(
+  schema: Schema,
+  data: unknown
+): ValidationResult<Output> => {
   const result = schema.safeParse(data);
 
   if (result.success) {
@@ -37,16 +39,18 @@ export const validateSchema = <T extends ZodTypeAny>(schema: T, data: unknown): 
   };
 };
 
-export const ensureValid = <T>(schema: ZodSchema<T>, data: unknown, message = 'Validation failed'): T => {
-  try {
-    return schema.parse(data);
-  } catch (error) {
-    if (error instanceof ZodError) {
-      throw new ValidationError(message, error.issues, {
-        errors: formatIssues(error.issues),
-      });
-    }
+export const ensureValid = <Output, Input, Schema extends ZodType<Output, ZodTypeDef, Input>>(
+  schema: Schema,
+  data: unknown,
+  message = 'Validation failed'
+): Output => {
+  const result = schema.safeParse(data);
 
-    throw error;
+  if (result.success) {
+    return result.data;
   }
+
+  throw new ValidationError(message, result.error.issues, {
+    errors: formatIssues(result.error.issues),
+  });
 };

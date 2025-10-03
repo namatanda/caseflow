@@ -29,7 +29,7 @@ describe('DailyImportBatchService', () => {
     findRecent: ReturnType<typeof vi.fn>;
     findByStatus: ReturnType<typeof vi.fn>;
     transaction: ReturnType<typeof vi.fn>;
-    findById: ReturnType<typeof vi.fn>;
+    findByIdWithDetails: ReturnType<typeof vi.fn>;
   };
   let service: DailyImportBatchService;
 
@@ -39,7 +39,7 @@ describe('DailyImportBatchService', () => {
       findRecent: vi.fn(),
       findByStatus: vi.fn(),
       transaction: vi.fn(),
-      findById: vi.fn(),
+      findByIdWithDetails: vi.fn(),
     };
     service = new DailyImportBatchService(repository as any);
     createManyMock.mockReset();
@@ -48,11 +48,11 @@ describe('DailyImportBatchService', () => {
 
   it('retrieves a batch by id', async () => {
     const batch = { id: 'batch-123' };
-    repository.findById.mockResolvedValue(batch);
+    repository.findByIdWithDetails.mockResolvedValue(batch);
 
     const result = await service.getBatchById('batch-123', { includeErrorDetails: true });
 
-    expect(repository.findById).toHaveBeenCalledWith('batch-123', { includeErrorDetails: true });
+    expect(repository.findByIdWithDetails).toHaveBeenCalledWith('batch-123', { includeErrorDetails: true });
     expect(result).toBe(batch);
   });
 
