@@ -13,12 +13,17 @@ import {
   getCorsMiddleware,
   generalRateLimit,
   applySecurity,
+  metricsMiddleware,
 } from '@/middleware';
 import { apiRoutes } from '@/routes';
 // Import worker to initialize it
 import '@/workers/csvImportWorker';
 import { closeQueues } from '@/config/queue';
 import { websocketService } from '@/services/websocketService';
+import { initializeMetrics } from '@/config/metrics';
+
+// Initialize Prometheus metrics collection
+initializeMetrics();
 
 const app = express();
 
@@ -38,6 +43,9 @@ app.use(generalRateLimit);
 app.use(compression());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Prometheus metrics middleware (track HTTP requests)
+app.use(metricsMiddleware);
 
 // Logging middleware
 if (config.env !== 'test') {
@@ -130,6 +138,186 @@ const swaggerOptions = {
               type: 'string',
               enum: ['ADMIN', 'DATA_ENTRY', 'VIEWER'],
               description: 'User role',
+            },
+          },
+        },
+        ImportBatch: {
+          type: 'object',
+          properties: {
+            id: {
+              type: 'string',
+              description: 'Batch ID',
+            },
+            importDate: {
+              type: 'string',
+              format: 'date-time',
+              description: 'Date of import',
+            },
+            filename: {
+              type: 'string',
+              description: 'Original CSV filename',
+            },
+            status: {
+              type: 'string',
+              enum: ['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED'],
+              description: 'Import batch status',
+            },
+            totalRecords: {
+              type: 'integer',
+              description: 'Total number of records in the CSV',
+            },
+            successfulRecords: {
+              type: 'integer',
+              description: 'Number of successfully imported records',
+            },
+            failedRecords: {
+              type: 'integer',
+              description: 'Number of failed records',
+            },
+            createdAt: {
+              type: 'string',
+              format: 'date-time',
+            },
+            updatedAt: {
+              type: 'string',
+              format: 'date-time',
+            },
+          },
+        },
+        ImportJob: {
+          type: 'object',
+          properties: {
+            id: {
+              type: 'string',
+              description: 'Job ID',
+            },
+            batchId: {
+              type: 'string',
+              description: 'Associated batch ID',
+            },
+            status: {
+              type: 'string',
+              enum: ['waiting', 'active', 'completed', 'failed', 'delayed'],
+              description: 'Job status',
+            },
+            progress: {
+              type: 'integer',
+              minimum: 0,
+              maximum: 100,
+              description: 'Job progress percentage',
+            },
+            data: {
+              type: 'object',
+              description: 'Job data',
+            },
+            returnvalue: {
+              type: 'object',
+              description: 'Job return value',
+            },
+            failedReason: {
+              type: 'string',
+              description: 'Failure reason if job failed',
+            },
+          },
+        },
+        HealthCheckResponse: {
+          type: 'object',
+          properties: {
+            status: {
+              type: 'string',
+              enum: ['healthy', 'degraded', 'unhealthy'],
+              description: 'Overall system health status',
+            },
+            timestamp: {
+              type: 'string',
+              format: 'date-time',
+            },
+            uptime: {
+              type: 'number',
+              description: 'System uptime in seconds',
+            },
+            environment: {
+              type: 'string',
+              description: 'Environment name',
+            },
+            version: {
+              type: 'string',
+              description: 'API version',
+            },
+            checks: {
+              type: 'object',
+              properties: {
+                database: {
+                  $ref: '#/components/schemas/HealthCheckItem',
+                },
+                redis: {
+                  $ref: '#/components/schemas/HealthCheckItem',
+                },
+                memory: {
+                  $ref: '#/components/schemas/HealthCheckItem',
+                },
+                disk: {
+                  $ref: '#/components/schemas/HealthCheckItem',
+                },
+              },
+            },
+          },
+        },
+        HealthCheckItem: {
+          type: 'object',
+          properties: {
+            status: {
+              type: 'string',
+              enum: ['healthy', 'unhealthy'],
+            },
+            responseTime: {
+              type: 'number',
+              description: 'Response time in milliseconds',
+            },
+            message: {
+              type: 'string',
+              description: 'Status message',
+            },
+            details: {
+              type: 'object',
+              description: 'Additional details',
+            },
+          },
+        },
+        VersionResponse: {
+          type: 'object',
+          properties: {
+            name: {
+              type: 'string',
+              example: 'CourtFlow Backend API',
+            },
+            version: {
+              type: 'string',
+              example: '1.0.0',
+            },
+            apiVersion: {
+              type: 'string',
+              example: 'v1',
+            },
+            nodeVersion: {
+              type: 'string',
+              example: 'v18.17.0',
+            },
+            environment: {
+              type: 'string',
+            },
+            uptime: {
+              type: 'number',
+            },
+            buildDate: {
+              type: 'string',
+              format: 'date-time',
+            },
+            platform: {
+              type: 'string',
+            },
+            arch: {
+              type: 'string',
             },
           },
         },

@@ -4,6 +4,18 @@ import { importService } from '@/services/importService';
 import { logger } from '@/utils/logger';
 import { cleanupTempFile } from '@/middleware/upload';
 import { websocketService } from '@/services/websocketService';
+import {
+  csvImportJobsTotal,
+  csvImportDuration,
+  csvImportRecords,
+  csvImportBatchSize,
+  csvImportRowProcessingDuration,
+  csvImportMemoryUsage,
+  csvImportErrorsTotal,
+  csvImportThroughput,
+  csvImportQueueWaitDuration,
+  csvImportBatchProcessingDuration,
+} from '@/config/metrics';
 
 // Job data interface
 export interface CsvImportJobData {
@@ -31,8 +43,19 @@ export interface CsvImportJobData {
 // Processor function
 export const csvImportProcessor = async (job: Job<CsvImportJobData>) => {
   const { batchId, payload, filePath, options = {} } = job.data;
+  const startTime = Date.now();
 
   logger.info(`Starting CSV import job ${job.id} for batch ${batchId}`);
+
+  // Track queue wait time
+  const queueWaitTime = (job.processedOn! - job.timestamp) / 1000;
+  csvImportQueueWaitDuration.observe(queueWaitTime);
+
+  // Track initial memory usage
+  csvImportMemoryUsage.set(process.memoryUsage().heapUsed);
+
+  // Track job started
+  csvImportJobsTotal.inc({ status: 'processing' });
 
   try {
     // Emit import started event
@@ -78,6 +101,9 @@ export const csvImportProcessor = async (job: Job<CsvImportJobData>) => {
       message: 'Importing records',
     });
 
+    // Track batch processing start
+    const processingStartTime = Date.now();
+
     // Process the CSV batch
     const processOptions: any = {};
     if (options?.chunkSize) processOptions.chunkSize = options.chunkSize;
@@ -107,6 +133,22 @@ export const csvImportProcessor = async (job: Job<CsvImportJobData>) => {
       throw new Error('Either filePath or payload must be provided');
     }
 
+    // Calculate batch processing metrics
+    const processingDuration = (Date.now() - processingStartTime) / 1000;
+    csvImportBatchProcessingDuration.observe(processingDuration);
+
+    const totalRecords = (result as any).totals.totalRecords || 0;
+    const throughput = totalRecords > 0 ? totalRecords / processingDuration : 0;
+    csvImportThroughput.set(throughput);
+
+    // Track final memory usage
+    csvImportMemoryUsage.set(process.memoryUsage().heapUsed);
+
+    // Track batch size and records
+    csvImportBatchSize.set(totalRecords);
+    csvImportRecords.inc({ status: 'successful' }, (result as any).totals.successfulRecords || 0);
+    csvImportRecords.inc({ status: 'failed' }, (result as any).totals.failedRecords || 0);
+
     try {
       await job.updateProgress(100);
     } catch (error) {
@@ -122,6 +164,10 @@ export const csvImportProcessor = async (job: Job<CsvImportJobData>) => {
       failedRecords: (result as any).totals.failedRecords,
       duration: Date.now() - job.processedOn!,
     });
+
+    // Track job completion metrics
+    csvImportJobsTotal.inc({ status: 'completed' });
+    csvImportDuration.observe({ status: 'success' }, (Date.now() - startTime) / 1000);
 
     logger.info(`Completed CSV import job ${job.id} for batch ${batchId}`, {
       successfulRecords: (result as any).totals.successfulRecords,
@@ -140,6 +186,13 @@ export const csvImportProcessor = async (job: Job<CsvImportJobData>) => {
 
     return result;
   } catch (error) {
+    // Track error metrics
+    const errorType = error instanceof Error && error.message.includes('validation') ? 'validation' :
+                      error instanceof Error && error.message.includes('database') ? 'database' : 'unknown';
+    csvImportErrorsTotal.inc({ error_type: errorType });
+    csvImportJobsTotal.inc({ status: 'failed' });
+    csvImportDuration.observe({ status: 'failed' }, (Date.now() - startTime) / 1000);
+
     logger.error(`Failed CSV import job ${job.id} for batch ${batchId}:`, error);
 
     // Emit failure event

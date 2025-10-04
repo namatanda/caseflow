@@ -66,3 +66,6 @@ export {
   TEMP_DIR,
   UPLOADS_DIR
 } from './upload';
+
+// Metrics Middleware
+export { metricsMiddleware } from './metrics';

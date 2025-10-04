@@ -2,7 +2,7 @@
 
 ## Phase 1: Core API Endpoints development
 
-- [ ] 1. Data import system endpoints
+- [x] 1. Data import system endpoints
   - Create POST endpoint using ImportService for CSV file uploads
   - Implement GET using ImportService for import progress
   - Create GET endpoint using ImportService for import history
@@ -10,7 +10,7 @@
   - Implement real-time progress updates via WebSocket or polling
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
 
-- [ ] 2. Create system and health endpoints
+- [x] 2. Create system and health endpoints
   - Implement GET using SystemService with comprehensive health checks
   - Create GET  endpoint using SystemService for Prometheus metrics
   - Add GET endpoint using SystemService for version information

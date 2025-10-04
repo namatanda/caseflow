@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CourtFlow - CSV Import Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f7fa;
+            color: #2c3e50;
+        }
+
+        /* Header */
+        .header {
+            background: #1976d2;
+            color: white;
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .user-menu {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .user-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: #42a5f5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+        }
+
+        /* Sidebar */
+        .layout {
+            display: flex;
+            height: calc(100vh - 64px);
+        }
+
+        .sidebar {
+            width: 240px;
+            background: white;
+            border-right: 1px solid #e0e0e0;
+            padding: 1.5rem 0;
+        }
+
+        .nav-item {
+            padding: 0.75rem 1.5rem;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .nav-item:hover {
+            background: #f5f5f5;
+        }
+
+        .nav-item.active {
+            background: #e3f2fd;
+            color: #1976d2;
+            border-left: 3px solid #1976d2;
+        }
+
+        .nav-icon {
+            width: 20px;
+            height: 20px;
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            padding: 2rem;
+            overflow-y: auto;
+        }
+
+        .page-header {
+            margin-bottom: 2rem;
+        }
+
+        .page-header h2 {
+            font-size: 1.75rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .page-header p {
+            color: #666;
+        }
+
+        /* Cards */
+        .card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 0.5rem 0;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 0.875rem;
+        }
+
+        .stat-change {
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+        }
+
+        .stat-change.positive {
+            color: #4caf50;
+        }
+
+        .stat-change.negative {
+            color: #f44336;
+        }
+
+        /* Upload Zone */
+        .upload-zone {
+            border: 2px dashed #1976d2;
+            border-radius: 8px;
+            padding: 3rem;
+            text-align: center;
+            background: #f8fbff;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .upload-zone:hover {
+            background: #e3f2fd;
+            border-color: #0d47a1;
+        }
+
+        .upload-icon {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 1rem;
+            background: #1976d2;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 2rem;
+        }
+
+        /* Progress Cards */
+        .progress-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .progress-card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 1rem;
+            border-left: 4px solid #1976d2;
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+
+        .progress-bar-container {
+            background: #e0e0e0;
+            border-radius: 4px;
+            height: 8px;
+            overflow: hidden;
+            margin-bottom: 0.5rem;
+        }
+
+        .progress-bar {
+            background: #1976d2;
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s;
+        }
+
+        .progress-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.875rem;
+            color: #666;
+        }
+
+        /* Status Badge */
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge-success {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .badge-warning {
+            background: #fff3e0;
+            color: #e65100;
+        }
+
+        .badge-error {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .badge-info {
+            background: #e3f2fd;
+            color: #1565c0;
+        }
+
+        /* Table */
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .table th {
+            text-align: left;
+            padding: 0.75rem;
+            border-bottom: 2px solid #e0e0e0;
+            font-weight: 600;
+            color: #666;
+            font-size: 0.875rem;
+        }
+
+        .table td {
+            padding: 1rem 0.75rem;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .table tr:hover {
+            background: #f5f5f5;
+        }
+
+        /* Button */
+        .btn {
+            padding: 0.5rem 1.5rem;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #1976d2;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1565c0;
+        }
+
+        .btn-secondary {
+            background: white;
+            color: #1976d2;
+            border: 1px solid #1976d2;
+        }
+
+        /* System Health */
+        .health-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+        }
+
+        .health-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .health-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .health-indicator.healthy {
+            background: #4caf50;
+        }
+
+        .health-indicator.warning {
+            background: #ff9800;
+        }
+
+        .health-indicator.error {
+            background: #f44336;
+        }
+
+        /* Chart Placeholder */
+        .chart-container {
+            height: 300px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <h1>⚖️ CourtFlow</h1>
+        <div class="user-menu">
+            <span>John Doe</span>
+            <div class="user-avatar">JD</div>
+        </div>
+    </div>
+
+    <!-- Main Layout -->
+    <div class="layout">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="nav-item active">
+                <span class="nav-icon">📊</span>
+                <span>Dashboard</span>
+            </div>
+            <div class="nav-item">
+                <span class="nav-icon">📤</span>
+                <span>Import Data</span>
+            </div>
+            <div class="nav-item">
+                <span class="nav-icon">📋</span>
+                <span>Batches</span>
+            </div>
+            <div class="nav-item">
+                <span class="nav-icon">💾</span>
+                <span>System Health</span>
+            </div>
+            <div class="nav-item">
+                <span class="nav-icon">👤</span>
+                <span>Profile</span>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <div class="page-header">
+                <h2>Import Dashboard</h2>
+                <p>Monitor and manage CSV data imports</p>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Total Imports</div>
+                    <div class="stat-value">1,247</div>
+                    <div class="stat-change positive">↑ 12% from last month</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Active Jobs</div>
+                    <div class="stat-value">3</div>
+                    <div class="stat-change">In progress</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Success Rate</div>
+                    <div class="stat-value">98.5%</div>
+                    <div class="stat-change positive">↑ 2.3%</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Records Processed</div>
+                    <div class="stat-value">524K</div>
+                    <div class="stat-change positive">↑ 18%</div>
+                </div>
+            </div>
+
+            <!-- Upload Section -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Upload CSV File</h3>
+                    <button class="btn btn-secondary">View Templates</button>
+                </div>
+                <div class="upload-zone">
+                    <div class="upload-icon">📁</div>
+                    <h3>Drag & drop CSV file here</h3>
+                    <p style="margin-top: 0.5rem; color: #666;">or click to browse</p>
+                    <p style="margin-top: 0.5rem; font-size: 0.875rem; color: #999;">
+                        Maximum file size: 10MB • Supported format: CSV
+                    </p>
+                </div>
+            </div>
+
+            <!-- Active Imports -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Active Imports</h3>
+                    <span class="badge badge-info">3 Active</span>
+                </div>
+                <div class="progress-list">
+                    <div class="progress-card">
+                        <div class="progress-header">
+                            <div>
+                                <strong>court_cases_batch_001.csv</strong>
+                                <div style="font-size: 0.875rem; color: #666; margin-top: 0.25rem;">
+                                    Batch ID: 7a3f9c2e • Started: 2 minutes ago
+                                </div>
+                            </div>
+                            <span class="badge badge-info">Parsing</span>
+                        </div>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar" style="width: 65%;"></div>
+                        </div>
+                        <div class="progress-info">
+                            <span>6,500 / 10,000 records</span>
+                            <span>65%</span>
+                        </div>
+                    </div>
+
+                    <div class="progress-card">
+                        <div class="progress-header">
+                            <div>
+                                <strong>judgments_2024_Q3.csv</strong>
+                                <div style="font-size: 0.875rem; color: #666; margin-top: 0.25rem;">
+                                    Batch ID: 5b8d1f4a • Started: 5 minutes ago
+                                </div>
+                            </div>
+                            <span class="badge badge-info">Importing</span>
+                        </div>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar" style="width: 82%;"></div>
+                        </div>
+                        <div class="progress-info">
+                            <span>8,200 / 10,000 records</span>
+                            <span>82%</span>
+                        </div>
+                    </div>
+
+                    <div class="progress-card">
+                        <div class="progress-header">
+                            <div>
+                                <strong>case_updates_daily.csv</strong>
+                                <div style="font-size: 0.875rem; color: #666; margin-top: 0.25rem;">
+                                    Batch ID: 9e2c6b7f • Started: 8 minutes ago
+                                </div>
+                            </div>
+                            <span class="badge badge-info">Validation</span>
+                        </div>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar" style="width: 35%;"></div>
+                        </div>
+                        <div class="progress-info">
+                            <span>1,750 / 5,000 records</span>
+                            <span>35%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Batches -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Recent Batches</h3>
+                    <button class="btn btn-primary">Export Report</button>
+                </div>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Batch ID</th>
+                            <th>File Name</th>
+                            <th>Records</th>
+                            <th>Status</th>
+                            <th>Completed</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>3f8a2c1d</code></td>
+                            <td>supreme_court_cases.csv</td>
+                            <td>15,234</td>
+                            <td><span class="badge badge-success">Completed</span></td>
+                            <td>10 minutes ago</td>
+                            <td><button class="btn btn-secondary" style="padding: 0.25rem 0.75rem;">View</button></td>
+                        </tr>
+                        <tr>
+                            <td><code>6c9e4b2a</code></td>
+                            <td>appeals_monthly.csv</td>
+                            <td>8,765</td>
+                            <td><span class="badge badge-success">Completed</span></td>
+                            <td>1 hour ago</td>
+                            <td><button class="btn btn-secondary" style="padding: 0.25rem 0.75rem;">View</button></td>
+                        </tr>
+                        <tr>
+                            <td><code>1a7d3f5e</code></td>
+                            <td>magistrate_records.csv</td>
+                            <td>12,456</td>
+                            <td><span class="badge badge-error">Failed</span></td>
+                            <td>2 hours ago</td>
+                            <td><button class="btn btn-secondary" style="padding: 0.25rem 0.75rem;">Retry</button></td>
+                        </tr>
+                        <tr>
+                            <td><code>8e2b9c4f</code></td>
+                            <td>case_assignments.csv</td>
+                            <td>6,543</td>
+                            <td><span class="badge badge-success">Completed</span></td>
+                            <td>3 hours ago</td>
+                            <td><button class="btn btn-secondary" style="padding: 0.25rem 0.75rem;">View</button></td>
+                        </tr>
+                        <tr>
+                            <td><code>4b6c1a8d</code></td>
+                            <td>pending_hearings.csv</td>
+                            <td>9,876</td>
+                            <td><span class="badge badge-warning">Partial</span></td>
+                            <td>5 hours ago</td>
+                            <td><button class="btn btn-secondary" style="padding: 0.25rem 0.75rem;">Review</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- System Health -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">System Health</h3>
+                    <span class="badge badge-success">All Systems Operational</span>
+                </div>
+                <div class="health-grid">
+                    <div class="health-item">
+                        <div class="health-indicator healthy"></div>
+                        <div>
+                            <div style="font-weight: 600;">Database</div>
+                            <div style="font-size: 0.875rem; color: #666;">Connected • 45ms latency</div>
+                        </div>
+                    </div>
+                    <div class="health-item">
+                        <div class="health-indicator healthy"></div>
+                        <div>
+                            <div style="font-weight: 600;">Redis Cache</div>
+                            <div style="font-size: 0.875rem; color: #666;">Operational • 1.2GB used</div>
+                        </div>
+                    </div>
+                    <div class="health-item">
+                        <div class="health-indicator healthy"></div>
+                        <div>
+                            <div style="font-weight: 600;">Queue System</div>
+                            <div style="font-size: 0.875rem; color: #666;">Running • 3 jobs active</div>
+                        </div>
+                    </div>
+                    <div class="health-item">
+                        <div class="health-indicator warning"></div>
+                        <div>
+                            <div style="font-weight: 600;">Disk Space</div>
+                            <div style="font-size: 0.875rem; color: #666;">78% used • 22GB free</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
