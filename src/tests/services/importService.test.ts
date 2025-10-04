@@ -82,13 +82,13 @@ describe('ImportService', () => {
           totalRecords: input.totalRecords,
           successfulRecords: 0,
           failedRecords: 0,
-          errorLogs: [],
+          errorLogs: '[]',
           status: 'PENDING',
           createdBy: input.createdBy,
           estimatedCompletionTime: input.estimatedCompletionTime,
           processingStartTime: null,
-          userConfig: input.userConfig,
-          validationWarnings: input.validationWarnings,
+          userConfig: JSON.stringify(input.userConfig),
+          validationWarnings: JSON.stringify(input.validationWarnings),
           emptyRowsSkipped: input.emptyRowsSkipped,
         }),
       })
@@ -137,7 +137,6 @@ describe('ImportService', () => {
 
     const options: ProcessCsvBatchOptions = {
       chunkSize: 100,
-      skipDuplicates: false,
       totals: {
         totalRecords: 6,
         failedRecords: 2,
@@ -160,7 +159,6 @@ describe('ImportService', () => {
 
     expect(csvServiceMock.importCaseData).toHaveBeenCalledWith(payload, {
       chunkSize: options.chunkSize,
-      skipDuplicates: options.skipDuplicates,
     });
 
     expect(batchServiceMock.completeBatch).toHaveBeenCalledWith(

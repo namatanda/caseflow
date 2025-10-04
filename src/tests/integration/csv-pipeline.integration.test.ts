@@ -53,6 +53,7 @@ describe('CSV Pipeline Integration Test', () => {
         id TEXT PRIMARY KEY,
         email TEXT NOT NULL UNIQUE,
         name TEXT NOT NULL,
+        password TEXT NOT NULL,
         role TEXT DEFAULT 'DATA_ENTRY',
         is_active BOOLEAN DEFAULT true,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -208,6 +209,7 @@ describe('CSV Pipeline Integration Test', () => {
         email: 'test@example.com',
         name: 'Test User',
         role: 'DATA_ENTRY',
+        password: 'hashed-password',
       },
     });
   });

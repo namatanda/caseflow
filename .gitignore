@@ -87,3 +87,4 @@ jspm_packages/
 .DS_Store
 Thumbs.db
 prisma/dev.db
+prisma/:memory*

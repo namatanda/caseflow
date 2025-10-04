@@ -1,17 +1,22 @@
 import { Router } from 'express';
+import { authenticateToken } from '@/middleware/auth';
 import { systemRoutes } from './system';
 import { importRoutes } from './import';
+import authRoutes from './auth';
 
 const router = Router();
 
-// System routes (health, metrics, etc.)
-router.use('/system', systemRoutes);
+// Public routes (no authentication required)
+router.use('/system', systemRoutes); // Health checks, metrics, version info
+router.use('/auth', authRoutes);     // Login, register, refresh, logout, profile, change-password
 
-// Import/export routes
+// Apply global authentication to all other routes
+router.use(authenticateToken);
+
+// Protected routes (authentication required)
 router.use('/import', importRoutes);
 
 // Placeholder for other routes that will be added in subsequent tasks
-// router.use('/auth', authRoutes);
 // router.use('/dashboard', dashboardRoutes);
 // router.use('/cases', caseRoutes);
 

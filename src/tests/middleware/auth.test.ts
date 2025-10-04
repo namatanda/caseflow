@@ -33,6 +33,13 @@ vi.mock('@/utils/logger', () => ({
   }
 }));
 
+vi.mock('@/services/tokenBlacklistService', () => ({
+  tokenBlacklistService: {
+    isTokenBlacklisted: vi.fn().mockResolvedValue(false),
+    areAllUserTokensBlacklisted: vi.fn().mockResolvedValue(false),
+  },
+}));
+
 describe('Authentication Middleware', () => {
   let mockRequest: Partial<Request>;
   let mockResponse: Partial<Response>;
@@ -53,7 +60,7 @@ describe('Authentication Middleware', () => {
   });
 
   describe('authenticateToken', () => {
-    it('should authenticate valid token and add user to request', () => {
+    it('should authenticate valid token and add user to request', async () => {
       const mockPayload: JwtPayload = {
         id: 'user-123',
         email: 'test@example.com',
@@ -67,7 +74,7 @@ describe('Authentication Middleware', () => {
 
       vi.mocked(jwt.verify).mockReturnValue(mockPayload);
 
-      authenticateToken(mockRequest as Request, mockResponse as Response, mockNext);
+      await authenticateToken(mockRequest as Request, mockResponse as Response, mockNext);
 
       expect(jwt.verify).toHaveBeenCalledWith('valid-token', 'test-secret-key-that-is-long-enough');
       expect(mockRequest.user).toEqual({
@@ -79,10 +86,10 @@ describe('Authentication Middleware', () => {
       expect(mockNext).toHaveBeenCalledWith();
     });
 
-    it('should throw AuthenticationError when no token provided', () => {
+    it('should throw AuthenticationError when no token provided', async () => {
       mockRequest.headers = {};
 
-      authenticateToken(mockRequest as Request, mockResponse as Response, mockNext);
+      await authenticateToken(mockRequest as Request, mockResponse as Response, mockNext);
 
       expect(mockNext).toHaveBeenCalledWith(expect.any(AuthenticationError));
       expect(mockNext).toHaveBeenCalledWith(
@@ -92,7 +99,7 @@ describe('Authentication Middleware', () => {
       );
     });
 
-    it('should throw AuthenticationError when token is invalid', () => {
+    it('should throw AuthenticationError when token is invalid', async () => {
       mockRequest.headers = {
         authorization: 'Bearer invalid-token'
       };
@@ -101,7 +108,7 @@ describe('Authentication Middleware', () => {
         throw new jwt.JsonWebTokenError('invalid token');
       });
 
-      authenticateToken(mockRequest as Request, mockResponse as Response, mockNext);
+      await authenticateToken(mockRequest as Request, mockResponse as Response, mockNext);
 
       expect(mockNext).toHaveBeenCalledWith(expect.any(AuthenticationError));
       expect(mockNext).toHaveBeenCalledWith(
@@ -111,7 +118,7 @@ describe('Authentication Middleware', () => {
       );
     });
 
-    it('should throw AuthenticationError when token is expired', () => {
+    it('should throw AuthenticationError when token is expired', async () => {
       mockRequest.headers = {
         authorization: 'Bearer expired-token'
       };
@@ -120,7 +127,7 @@ describe('Authentication Middleware', () => {
         throw new jwt.TokenExpiredError('jwt expired', new Date());
       });
 
-      authenticateToken(mockRequest as Request, mockResponse as Response, mockNext);
+      await authenticateToken(mockRequest as Request, mockResponse as Response, mockNext);
 
       expect(mockNext).toHaveBeenCalledWith(expect.any(AuthenticationError));
       expect(mockNext).toHaveBeenCalledWith(
@@ -130,12 +137,12 @@ describe('Authentication Middleware', () => {
       );
     });
 
-    it('should handle malformed authorization header', () => {
+    it('should handle malformed authorization header', async () => {
       mockRequest.headers = {
         authorization: 'InvalidFormat'
       };
 
-      authenticateToken(mockRequest as Request, mockResponse as Response, mockNext);
+      await authenticateToken(mockRequest as Request, mockResponse as Response, mockNext);
 
       expect(mockNext).toHaveBeenCalledWith(expect.any(AuthenticationError));
     });

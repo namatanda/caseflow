@@ -1,0 +1,28 @@
+{
+  "mcpServers": {
+    "sqlite": {
+      "command": "uvx",
+      "args": [
+        "mcp-server-sqlite",
+        "--db-path",
+        "/home/fiend/Softwares/backend/prisma/dev.db"
+      ]
+    },
+    "Context7": {
+			"command": "npx",
+			"args": [
+				"--yes",
+				"@upstash/context7-mcp",
+				"--api-key",
+				"ctx7sk-55ac968a-8608-44a8-8725-1779228952d3"
+			],
+			"env": {
+				"FORCE_COLOR": "0",
+				"NO_UPDATE_NOTIFIER": "1"
+			},
+			"disabled": false,
+			"autoApprove": [],
+			"disabledTools": [],
+			"type": "stdio"}
+		}
+}

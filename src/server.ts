@@ -1,6 +1,8 @@
 import express from 'express';
 import compression from 'compression';
 import morgan from 'morgan';
+import swaggerJsdoc from 'swagger-jsdoc';
+import swaggerUi from 'swagger-ui-express';
 import { register } from 'prom-client';
 import { config } from '@/config/environment';
 import { logger } from '@/utils/logger';
@@ -43,6 +45,103 @@ if (config.env !== 'test') {
 }
 app.use(requestLogger);
 
+// Swagger configuration
+const swaggerOptions = {
+  definition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'CourtFlow Backend API',
+      version: '1.0.0',
+      description: 'Backend API for CourtFlow - Court Case Management System',
+      contact: {
+        name: 'CourtFlow Development Team',
+        email: 'dev@courtflow.go.ke'
+      },
+    },
+    servers: [
+      {
+        url: `http://localhost:${config.port}/api/v1`,
+        description: 'Development server',
+      },
+    ],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+        },
+      },
+      schemas: {
+        Error: {
+          type: 'object',
+          properties: {
+            message: {
+              type: 'string',
+              description: 'Error message',
+            },
+            code: {
+              type: 'string',
+              description: 'Error code',
+            },
+            statusCode: {
+              type: 'number',
+              description: 'HTTP status code',
+            },
+          },
+        },
+        AuthTokens: {
+          type: 'object',
+          properties: {
+            accessToken: {
+              type: 'string',
+              description: 'JWT access token',
+            },
+            refreshToken: {
+              type: 'string',
+              description: 'JWT refresh token',
+            },
+            user: {
+              $ref: '#/components/schemas/User',
+            },
+          },
+        },
+        User: {
+          type: 'object',
+          properties: {
+            id: {
+              type: 'string',
+              description: 'User ID',
+            },
+            email: {
+              type: 'string',
+              format: 'email',
+              description: 'User email',
+            },
+            name: {
+              type: 'string',
+              description: 'User full name',
+            },
+            role: {
+              type: 'string',
+              enum: ['ADMIN', 'DATA_ENTRY', 'VIEWER'],
+              description: 'User role',
+            },
+          },
+        },
+      },
+    },
+    security: [
+      {
+        bearerAuth: [],
+      },
+    ],
+  },
+  apis: ['./src/routes/*.ts', './src/controllers/*.ts'], // Paths to files containing OpenAPI definitions
+};
+
+const swaggerSpec = swaggerJsdoc(swaggerOptions);
+
 // Health check endpoint (before other routes)
 app.get('/health', (_req, res) => {
   res.status(200).json({
@@ -52,6 +151,9 @@ app.get('/health', (_req, res) => {
     environment: config.env
   });
 });
+
+// Swagger UI
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // API Routes
 app.use('/api/v1', apiRoutes);
@@ -90,6 +192,7 @@ const server = app.listen(config.port, () => {
   logger.info(`🚀 CourtFlow Backend API Server running on port ${config.port}`);
   logger.info(`📝 Environment: ${config.env}`);
   logger.info(`🔗 API Base URL: http://localhost:${config.port}/api/v1`);
+  logger.info(`📚 API Documentation: http://localhost:${config.port}/api-docs`);
   logger.info(`❤️  Health Check: http://localhost:${config.port}/health`);
 });
 

@@ -199,8 +199,9 @@ model DailyImportBatch {
 
 model User {
   id            String             @id @default(uuid())
-  email         String             @unique 
-  name          String             
+  email         String             @unique
+  name          String
+  password      String
   role          UserRole           @default(DATA_ENTRY)
   isActive      Boolean            @default(true) @map("is_active")
   createdAt     DateTime           @default(now()) @map("created_at")

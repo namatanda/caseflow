@@ -95,9 +95,9 @@ describe('DailyImportBatchService', () => {
         status: 'COMPLETED',
         successfulRecords: 10,
         failedRecords: 2,
-        errorLogs: ['validation-error'],
+        errorLogs: JSON.stringify(['validation-error']),
         completedAt: options.completedAt,
-        validationWarnings: ['duplicate-record'],
+        validationWarnings: JSON.stringify(['duplicate-record']),
       },
     });
     expect(importErrorDetailConstructor).toHaveBeenCalledWith(mockTx.importErrorDetail);
@@ -124,7 +124,7 @@ describe('DailyImportBatchService', () => {
       where: { id: 'batch-2' },
       data: {
         status: 'FAILED',
-        errorLogs: ['system-error'],
+        errorLogs: JSON.stringify(['system-error']),
         completedAt: expect.any(Date),
       },
     });

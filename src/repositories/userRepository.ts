@@ -16,6 +16,38 @@ export class UserRepository extends BaseRepository<UserDelegate> {
     });
   }
 
+  findByEmailWithPassword(email: string) {
+    return this.delegate.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        password: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+  }
+
+  findByIdWithPassword(id: string) {
+    return this.delegate.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        password: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+  }
+
   findActive(options: Partial<Pick<Prisma.UserFindManyArgs, 'select' | 'include' | 'where'>> = {}) {
     return this.findMany({
       ...options,

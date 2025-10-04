@@ -1,0 +1,255 @@
+import type { Request, Response, NextFunction } from 'express';
+import { AuthService, type LoginCredentials, type RegisterData } from '@/services/authService';
+import { logger } from '@/utils/logger';
+
+/**
+ * Build service context from request
+ */
+const buildServiceContext = (req: Request): Record<string, unknown> => {
+  const context: Record<string, unknown> = {};
+  if (req.correlationId) context['correlationId'] = req.correlationId;
+  if (req.user?.id) context['userId'] = req.user.id;
+  return context;
+};
+
+export class AuthController {
+  constructor(private readonly service = new AuthService()) {}
+
+  /**
+   * Login endpoint
+   * POST /auth/login
+   */
+  async login(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const credentials: LoginCredentials = req.body;
+
+      // Validate required fields
+      if (!credentials.email || !credentials.password) {
+        res.status(400).json({
+          message: 'Email and password are required',
+        });
+        return;
+      }
+
+      // Create service instance with request context
+      const service = new AuthService(undefined, undefined, buildServiceContext(req));
+
+      const result = await service.login(credentials);
+
+      logger.info('User logged in successfully', {
+        userId: result.user.id,
+        email: result.user.email,
+        correlationId: req.correlationId,
+      });
+
+      res.status(200).json({
+        message: 'Login successful',
+        data: result,
+      });
+    } catch (error) {
+      logger.warn('Login failed', {
+        email: req.body.email,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        correlationId: req.correlationId,
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Register endpoint
+   * POST /auth/register
+   */
+  async register(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const data: RegisterData = req.body;
+
+      // Validate required fields
+      if (!data.email || !data.password || !data.name) {
+        res.status(400).json({
+          message: 'Email, password, and name are required',
+        });
+        return;
+      }
+
+      // Create service instance with request context
+      const service = new AuthService(undefined, undefined, buildServiceContext(req));
+
+      const result = await service.register(data);
+
+      logger.info('User registered successfully', {
+        userId: result.user.id,
+        email: result.user.email,
+        correlationId: req.correlationId,
+      });
+
+      res.status(201).json({
+        message: 'Registration successful',
+        data: result,
+      });
+    } catch (error) {
+      logger.warn('Registration failed', {
+        email: req.body.email,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        correlationId: req.correlationId,
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Refresh token endpoint
+   * POST /auth/refresh
+   */
+  async refreshToken(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { refreshToken } = req.body;
+
+      if (!refreshToken) {
+        res.status(400).json({
+          message: 'Refresh token is required',
+        });
+        return;
+      }
+
+      // Create service instance with request context
+      const service = new AuthService(undefined, undefined, buildServiceContext(req));
+
+      const result = await service.refreshToken(refreshToken);
+
+      logger.info('Token refreshed successfully', {
+        correlationId: req.correlationId,
+      });
+
+      res.status(200).json({
+        message: 'Token refreshed successfully',
+        data: result,
+      });
+    } catch (error) {
+      logger.warn('Token refresh failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        correlationId: req.correlationId,
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Logout endpoint
+   * POST /auth/logout
+   */
+  async logout(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user?.id;
+
+      // Extract access token from Authorization header
+      const authHeader = req.headers.authorization;
+      const accessToken = authHeader && authHeader.split(' ')[1];
+
+      if (userId) {
+        // Create service instance with request context
+        const service = new AuthService(undefined, undefined, buildServiceContext(req));
+
+        await service.logout(userId, accessToken);
+      }
+
+      logger.info('User logged out', {
+        userId,
+        correlationId: req.correlationId,
+      });
+
+      res.status(200).json({
+        message: 'Logout successful',
+      });
+    } catch (error) {
+      logger.warn('Logout failed', {
+        userId: req.user?.id,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        correlationId: req.correlationId,
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Get current user profile
+   * GET /auth/profile
+   */
+  async getProfile(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user?.id;
+
+      if (!userId) {
+        res.status(401).json({
+          message: 'Authentication required',
+        });
+        return;
+      }
+
+      // Create service instance with request context
+      const service = new AuthService(undefined, undefined, buildServiceContext(req));
+
+      const profile = await service.getProfile(userId);
+
+      res.status(200).json({
+        message: 'Profile retrieved successfully',
+        data: profile,
+      });
+    } catch (error) {
+      logger.error('Get profile failed', {
+        userId: req.user?.id,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        correlationId: req.correlationId,
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Change password endpoint
+   * POST /auth/change-password
+   */
+  async changePassword(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user?.id;
+      const { currentPassword, newPassword } = req.body;
+
+      if (!userId) {
+        res.status(401).json({
+          message: 'Authentication required',
+        });
+        return;
+      }
+
+      if (!currentPassword || !newPassword) {
+        res.status(400).json({
+          message: 'Current password and new password are required',
+        });
+        return;
+      }
+
+      // Create service instance with request context
+      const service = new AuthService(undefined, undefined, buildServiceContext(req));
+
+      await service.changePassword(userId, currentPassword, newPassword);
+
+      logger.info('Password changed successfully', {
+        userId,
+        correlationId: req.correlationId,
+      });
+
+      res.status(200).json({
+        message: 'Password changed successfully',
+      });
+    } catch (error) {
+      logger.warn('Password change failed', {
+        userId: req.user?.id,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        correlationId: req.correlationId,
+      });
+      next(error);
+    }
+  }
+}
+
+export const authController = new AuthController();

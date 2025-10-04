@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { config } from '@/config/environment';
 import { AuthenticationError, AuthorizationError } from './errorHandler';
 import { logger } from '@/utils/logger';
+import { tokenBlacklistService } from '@/services/tokenBlacklistService';
 
 // Extend Request interface to include user information
 declare module 'express-serve-static-core' {
@@ -31,11 +32,11 @@ export interface JwtPayload {
  * Authentication middleware that validates JWT tokens
  * Adds user information to request object if token is valid
  */
-export const authenticateToken = (
+export const authenticateToken = async (
   req: Request,
   _res: Response,
   next: NextFunction
-): void => {
+): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
@@ -53,19 +54,43 @@ export const authenticateToken = (
 
     // Verify JWT token
     const decoded = jwt.verify(token, config.jwt.secret) as JwtPayload;
-    
+
+    // Check if token is blacklisted
+    const isBlacklisted = await tokenBlacklistService.isTokenBlacklisted(token);
+    if (isBlacklisted) {
+      logger.warn('Authentication failed: Token is blacklisted', {
+        correlationId: req.correlationId,
+        userId: decoded.id,
+        ip: req.ip,
+        userAgent: req.get('User-Agent')
+      });
+      throw new AuthenticationError('Token has been revoked');
+    }
+
+    // Check if all user tokens are blacklisted (e.g., after password change)
+    const areAllUserTokensBlacklisted = await tokenBlacklistService.areAllUserTokensBlacklisted(decoded.id);
+    if (areAllUserTokensBlacklisted) {
+      logger.warn('Authentication failed: All user tokens are blacklisted', {
+        correlationId: req.correlationId,
+        userId: decoded.id,
+        ip: req.ip,
+        userAgent: req.get('User-Agent')
+      });
+      throw new AuthenticationError('Token has been revoked');
+    }
+
     // Add user information to request
     const userInfo: AuthenticatedUser = {
       id: decoded.id,
       email: decoded.email,
       role: decoded.role
     };
-    
+
     // Only add name if it exists
     if (decoded.name !== undefined) {
       userInfo.name = decoded.name;
     }
-    
+
     req.user = userInfo;
 
     logger.debug('Authentication successful', {

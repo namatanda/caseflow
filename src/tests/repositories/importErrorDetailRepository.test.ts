@@ -58,7 +58,6 @@ describe('ImportErrorDetailRepository', () => {
 
     expect(delegate.createMany).toHaveBeenCalledWith({
       data: details,
-      skipDuplicates: true,
     });
     expect(result).toEqual({ count: 2 });
     expect(delegate.store).toEqual(details);

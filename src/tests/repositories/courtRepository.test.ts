@@ -35,8 +35,8 @@ describe('CourtRepository', () => {
     expect(delegate.findMany).toHaveBeenCalledWith({
       where: {
         OR: [
-          { courtName: { contains: 'Central', mode: 'insensitive' } },
-          { courtCode: { contains: 'Central', mode: 'insensitive' } },
+          { courtName: { contains: 'Central' } },
+          { courtCode: { contains: 'Central' } },
         ],
         isActive: true,
       },

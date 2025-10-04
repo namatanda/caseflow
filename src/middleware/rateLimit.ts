@@ -1,7 +1,7 @@
 import rateLimit from 'express-rate-limit';
 import { Request, Response } from 'express';
 import { config } from '@/config/environment';
-import { logger } from '@/utils/logger';
+import { logger, auditLogger } from '@/utils/logger';
 import { RateLimitError } from './errorHandler';
 
 /**
@@ -21,7 +21,7 @@ interface RateLimitConfig {
  */
 const createRateLimitError = (req: Request, res: Response): void => {
   const error = new RateLimitError('Too many requests from this IP, please try again later.');
-  
+
   logger.warn('Rate limit exceeded', {
     correlationId: req.correlationId,
     ip: req.ip,
@@ -30,6 +30,14 @@ const createRateLimitError = (req: Request, res: Response): void => {
     method: req.method,
     userId: req.user?.id
   });
+
+  // Emit audit event for rate limit violations
+  auditLogger.rateLimitExceeded(
+    req.ip || 'unknown',
+    req.get('User-Agent') || undefined,
+    req.url,
+    req.correlationId
+  );
 
   res.status(error.statusCode).json({
     success: false,
