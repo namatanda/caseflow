@@ -1,0 +1,7 @@
+- [ ] 7. Create typed API client services
+  - Implement DashboardApiClient with typed methods for analytics endpoints
+  - Create CaseApiClient for case management operations
+  - Implement ImportApiClient for data import functionality
+  - Create AuthApiClient for authentication operations
+  - Add SystemApiClient for health checks and system information
+  - _Requirements: 3.1, 3.9, 8.6, 8.7_

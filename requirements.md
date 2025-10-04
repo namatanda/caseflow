@@ -2,9 +2,7 @@
 
 ## Introduction
 
-This document outlines the requirements for decoupling the CourtFlow frontend from the backend, transforming the current Next.js full-stack application into separate frontend and backend services. This architectural change will improve scalability, enable independent deployment cycles, facilitate team specialization, and provide better separation of concerns.
-
-The migration will transform the current monolithic Next.js application into a React-based frontend application and a standalone Node.js/Express backend API, while maintaining all existing functionality and data integrity.
+This document outlines the requirements for frontend and backend services of courtflow application.
 
 ## Requirements
 
@@ -29,16 +27,15 @@ The migration will transform the current monolithic Next.js application into a R
 
 #### Acceptance Criteria
 
-1. WHEN the frontend application loads THEN it SHALL render the same dashboard interface as the current application
-2. WHEN users interact with the dashboard THEN the frontend SHALL communicate with the backend via a dedicated API client library
-3. WHEN data is fetched THEN the frontend SHALL use appropriate state management for the chosen framework (TanStack Query for React, Pinia for Vue, etc.)
-4. WHEN forms are submitted THEN the frontend SHALL validate data client-side before sending to the backend
-5. WHEN authentication is required THEN the frontend SHALL store and manage JWT tokens securely regardless of framework
-6. WHEN API calls fail THEN the frontend SHALL implement proper error handling with retry logic and exponential backoff
-7. WHEN different frontend frameworks are used THEN the backend API SHALL provide the same functionality and data format
-8. WHEN database operations are needed THEN the frontend SHALL replace all direct database calls with API calls
-9. WHEN user interactions occur THEN the frontend SHALL implement proper loading states and error handling
-10. WHEN data mutations happen THEN the frontend SHALL implement optimistic updates where appropriate
+1. WHEN users interact with the dashboard THEN the frontend SHALL communicate with the backend via a dedicated API client library
+2. WHEN data is fetched THEN the frontend SHALL use appropriate state management for the chosen framework (TanStack Query for React, Pinia for Vue, etc.)
+3. WHEN forms are submitted THEN the frontend SHALL validate data client-side before sending to the backend
+4. WHEN authentication is required THEN the frontend SHALL store and manage JWT tokens securely regardless of framework
+5. WHEN API calls fail THEN the frontend SHALL implement proper error handling with retry logic and exponential backoff
+6. WHEN different frontend frameworks are used THEN the backend API SHALL provide the same functionality and data format
+7. WHEN database operations are needed THEN the frontend SHALL replace all direct database calls with API calls
+8. WHEN user interactions occur THEN the frontend SHALL implement proper loading states and error handling
+9. WHEN data mutations happen THEN the frontend SHALL implement optimistic updates where appropriate
 
 ### Requirement 3: API Client Library Development
 
@@ -56,17 +53,16 @@ The migration will transform the current monolithic Next.js application into a R
 8. WHEN token refresh is needed THEN the client SHALL automatically handle token refresh and retry failed requests
 9. WHEN request/response transformation is needed THEN the client SHALL provide interceptors for data formatting and validation
 
-### Requirement 4: Data Import System Migration
+### Requirement 4: Data Import System
 
-**User Story:** As a court administrator, I want the CSV import functionality to work seamlessly after the migration, so that I can continue importing case data without interruption.
+**User Story:** As a court administrator, I want the CSV import functionality to work seamlessly 
 
 #### Acceptance Criteria
 
-1. WHEN CSV files are uploaded THEN the backend SHALL process them using the existing validation logic
+1. WHEN CSV files are uploaded THEN the backend SHALL process and perform validation validation
 2. WHEN import jobs are created THEN the backend SHALL queue them using BullMQ for background processing
 3. WHEN import progress is requested THEN the backend SHALL provide real-time status updates via API endpoints
 4. WHEN imports complete THEN the frontend SHALL display success/failure notifications with detailed results
-5. WHEN large files are imported THEN the system SHALL maintain the same performance characteristics as before
 
 ### Requirement 5: Authentication and Authorization
 
@@ -82,7 +78,7 @@ The migration will transform the current monolithic Next.js application into a R
 
 ### Requirement 6: Database and State Management
 
-**User Story:** As a data analyst, I want all dashboard metrics and analytics to function identically after the migration, so that my workflows are not disrupted.
+**User Story:** As a data analyst, I want all dashboard metrics and analytics 
 
 #### Acceptance Criteria
 
