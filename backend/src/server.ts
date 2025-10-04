@@ -15,6 +15,10 @@ import {
   applySecurity,
 } from '@/middleware';
 import { apiRoutes } from '@/routes';
+// Import worker to initialize it
+import '@/workers/csvImportWorker';
+import { closeQueues } from '@/config/queue';
+import { websocketService } from '@/services/websocketService';
 
 const app = express();
 
@@ -143,7 +147,7 @@ const swaggerOptions = {
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
 
 // Health check endpoint (before other routes)
-app.get('/health', (_req, res) => {
+app.get('/health', (_req: express.Request, res: express.Response) => {
   res.status(200).json({
     status: 'ok',
     timestamp: new Date().toISOString(),
@@ -159,7 +163,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.use('/api/v1', apiRoutes);
 
 // Direct monitoring endpoints (for backward compatibility)
-app.get('/api/system/health', (_req, res) => {
+app.get('/api/system/health', (_req: express.Request, res: express.Response) => {
   // Simple health check without detailed diagnostics for monitoring
   res.json({ 
     status: 'ok',
@@ -168,7 +172,7 @@ app.get('/api/system/health', (_req, res) => {
   });
 });
 
-app.get('/api/system/metrics', (_req, res, next) => {
+app.get('/api/system/metrics', (_req: express.Request, res: express.Response, next: express.NextFunction) => {
   register
     .metrics()
     .then((metrics) => {
@@ -194,11 +198,32 @@ const server = app.listen(config.port, () => {
   logger.info(`🔗 API Base URL: http://localhost:${config.port}/api/v1`);
   logger.info(`📚 API Documentation: http://localhost:${config.port}/api-docs`);
   logger.info(`❤️  Health Check: http://localhost:${config.port}/health`);
+  
+  // Initialize WebSocket service
+  websocketService.initialize(server);
+  logger.info(`🔌 WebSocket service initialized at /ws`);
 });
 
 // Graceful shutdown
-const gracefulShutdown = (signal: NodeJS.Signals) => {
+const gracefulShutdown = async (signal: NodeJS.Signals) => {
   logger.info(`${signal} received, shutting down gracefully`);
+
+  try {
+    // Close WebSocket connections
+    await websocketService.close();
+    logger.info('WebSocket service closed successfully');
+  } catch (error) {
+    logger.error('Error closing WebSocket service during shutdown:', error);
+  }
+
+  try {
+    // Close queues
+    await closeQueues();
+    logger.info('Queues closed successfully');
+  } catch (error) {
+    logger.error('Error closing queues during shutdown:', error);
+  }
+
   server.close(() => {
     logger.info('Process terminated');
     process.exit(0);

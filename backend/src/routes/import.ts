@@ -6,8 +6,9 @@ import {
   type Response,
 } from 'express';
 
-import { authenticateToken, requireRole } from '@/middleware/auth';
+import { requireRole } from '@/middleware/auth';
 import { uploadRateLimit, searchRateLimit } from '@/middleware/rateLimit';
+import { uploadCsv } from '@/middleware/upload';
 import { importController } from '@/controllers/import';
 
 const router = Router();
@@ -31,49 +32,22 @@ const asyncHandler = (handler: AsyncHandler): RequestHandler => {
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
  *             type: object
  *             properties:
+ *               csvFile:
+ *                 type: string
+ *                 format: binary
+ *                 description: CSV file containing case data
  *               metadata:
- *                 type: object
- *                 properties:
- *                   filename:
- *                     type: string
- *                     example: cases.csv
- *                   fileSize:
- *                     type: number
- *                     example: 1024
- *                   totalRecords:
- *                     type: number
- *                     example: 100
- *               payload:
- *                 type: object
- *                 properties:
- *                   cases:
- *                     type: array
- *                     items:
- *                       type: object
- *                       properties:
- *                         caseNumber:
- *                           type: string
- *                         courtName:
- *                           type: string
- *                         filedDate:
- *                           type: string
- *                           format: date
- *                   activities:
- *                     type: array
- *                     items:
- *                       type: object
- *                       properties:
- *                         caseId:
- *                           type: string
- *                         activityDate:
- *                           type: string
- *                           format: date
- *                         activityType:
- *                           type: string
+ *                 type: string
+ *                 description: JSON string with metadata
+ *                 example: '{"filename":"cases.csv","createdBy":"user@example.com"}'
+ *               options:
+ *                 type: string
+ *                 description: JSON string with processing options
+ *                 example: '{"chunkSize":500}'
  *     responses:
  *       202:
  *         description: CSV processing started
@@ -84,16 +58,23 @@ const asyncHandler = (handler: AsyncHandler): RequestHandler => {
  *               properties:
  *                 batchId:
  *                   type: string
+ *                 jobId:
+ *                   type: string
  *                 status:
  *                   type: string
- *                   example: completed
+ *                   example: queued
+ *                 message:
+ *                   type: string
  *       400:
- *         description: Invalid request data
+ *         description: Invalid request data or file
+ *       413:
+ *         description: File too large
  */
 router.post(
   '/csv',
   requireRole(['DATA_ENTRY', 'ADMIN']),
   uploadRateLimit,
+  uploadCsv,
   asyncHandler((req, res, next) => importController.uploadCsv(req, res, next))
 );
 
@@ -186,6 +167,47 @@ router.get(
   '/batches/:batchId',
   requireRole(['VIEWER', 'DATA_ENTRY', 'ADMIN']),
   asyncHandler((req, res, next) => importController.getBatchStatus(req, res, next))
+);
+
+/**
+ * @swagger
+ * /import/jobs/{jobId}:
+ *   get:
+ *     summary: Get import job status
+ *     tags: [Import]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: jobId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Job ID
+ *     responses:
+ *       200:
+ *         description: Job status
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 jobId:
+ *                   type: string
+ *                 state:
+ *                   type: string
+ *                   enum: [waiting, active, completed, failed, delayed]
+ *                 progress:
+ *                   type: number
+ *                 attemptsMade:
+ *                   type: number
+ *       404:
+ *         description: Job not found
+ */
+router.get(
+  '/jobs/:jobId',
+  requireRole(['VIEWER', 'DATA_ENTRY', 'ADMIN']),
+  asyncHandler((req, res, next) => importController.getJobStatus(req, res, next))
 );
 
 /**

@@ -2,10 +2,12 @@ import os from 'node:os';
 import { statSync } from 'node:fs';
 import { checkDatabaseConnection } from '../config/database';
 import { checkRedisConnection } from '../config/redis';
+import { checkQueueHealth } from '../config/queue';
 import { logger } from './logger';
 
 type DatabaseHealthDetails = Awaited<ReturnType<typeof checkDatabaseConnection>>['details'];
 type RedisHealthDetails = Awaited<ReturnType<typeof checkRedisConnection>>['details'];
+type QueueHealthDetails = Awaited<ReturnType<typeof checkQueueHealth>>['details'];
 
 export interface HealthCheckResult {
   status: 'healthy' | 'unhealthy' | 'degraded';
@@ -23,6 +25,11 @@ export interface HealthCheckResult {
       status: 'healthy' | 'unhealthy';
       responseTime: number;
   details: RedisHealthDetails;
+    };
+    queues: {
+      status: 'healthy' | 'unhealthy';
+      responseTime: number;
+  details: QueueHealthDetails;
     };
     memory: {
       status: 'healthy' | 'unhealthy';
@@ -89,6 +96,18 @@ export class HealthChecker {
             responseTime: 0,
           },
         },
+        queues: {
+          status: 'unhealthy',
+          responseTime: 0,
+          details: {
+            csvImportQueue: false,
+            waiting: 0,
+            active: 0,
+            completed: 0,
+            failed: 0,
+            delayed: 0,
+          },
+        },
         memory: {
           status: 'healthy',
           usage: {
@@ -142,6 +161,25 @@ export class HealthChecker {
       logger.error('Redis health check failed:', error);
     }
 
+    // Check Queue health
+    try {
+      const queueCheck = await checkQueueHealth();
+      result.checks.queues = {
+        status: queueCheck.isHealthy ? 'healthy' : 'unhealthy',
+        responseTime: Date.now() - new Date(timestamp).getTime(), // Approximate response time
+        details: queueCheck.details,
+      };
+
+      if (!queueCheck.isHealthy) {
+        errors.push('Queue check failed');
+      }
+    } catch (error) {
+      result.checks.queues.status = 'unhealthy';
+      const errorMessage = error instanceof Error ? error.message : 'Unknown queue error';
+      errors.push(`Queue check error: ${errorMessage}`);
+      logger.error('Queue health check failed:', error);
+    }
+
     // Check memory usage
     try {
   const memoryUsage = process.memoryUsage();
@@ -183,8 +221,8 @@ export class HealthChecker {
 
     // Determine overall status
   const hasUnhealthyChecks = Object.values(result.checks).some((check) => check.status === 'unhealthy');
-    const hasCriticalErrors = errors.some(error => 
-      error.includes('Database') || error.includes('Redis')
+    const hasCriticalErrors = errors.some(error =>
+      error.includes('Database') || error.includes('Redis') || error.includes('Queue')
     );
 
     if (hasCriticalErrors) {
@@ -206,15 +244,16 @@ export class HealthChecker {
 
   async performQuickHealthCheck(): Promise<{ status: 'healthy' | 'unhealthy'; responseTime: number }> {
     const startTime = Date.now();
-    
+
     try {
       // Quick database ping
       const dbCheck = await checkDatabaseConnection();
       const redisCheck = await checkRedisConnection();
-      
-      const isHealthy = dbCheck.isHealthy && redisCheck.isHealthy;
+      const queueCheck = await checkQueueHealth();
+
+      const isHealthy = dbCheck.isHealthy && redisCheck.isHealthy && queueCheck.isHealthy;
       const responseTime = Date.now() - startTime;
-      
+
       return {
         status: isHealthy ? 'healthy' : 'unhealthy',
         responseTime,

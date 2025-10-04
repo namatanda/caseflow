@@ -1,5 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import { ImportStatus } from '@prisma/client';
+import { csvImportQueue } from '@/config/queue';
+import type { CsvImportJobData } from '@/workers/csvImportWorker';
 
 import {
   dailyImportBatchRepository,
@@ -146,6 +148,71 @@ export class ImportService extends BaseService<DailyImportBatchRepository> {
     };
   }
 
+  async processCsvFile(
+    batchId: string,
+    filePath: string,
+    options: ProcessCsvBatchOptions = {}
+  ) {
+    // Import required modules
+    const csv = await import('csv-parser');
+    const fs = await import('fs');
+    const crypto = await import('crypto');
+
+    return new Promise((resolve, reject) => {
+      const results: any[] = [];
+      let totalRecords = 0;
+
+      const stream = fs.createReadStream(filePath)
+        .pipe(csv.default())
+        .on('data', (data: any) => {
+          results.push(data);
+          totalRecords++;
+        })
+        .on('end', async () => {
+          try {
+            // Calculate file checksum
+            const fileBuffer = fs.readFileSync(filePath);
+            const checksum = crypto.default.createHash('md5').update(fileBuffer).digest('hex');
+
+            // Update batch with actual record count and checksum
+            await this.repository.update({
+              where: { id: batchId },
+              data: {
+                totalRecords,
+                fileChecksum: checksum,
+              },
+            });
+
+            // Convert CSV data to the expected format
+            const cases: any[] = results.map((row, index) => ({
+              caseNumber: row.caseNumber || `unknown-${index}`,
+              courtName: row.courtName || 'Unknown Court',
+              caseTypeId: row.caseTypeId || 'unknown',
+              filedDate: row.filedDate ? new Date(row.filedDate) : new Date(),
+              status: (row.status) || 'ACTIVE',
+              totalActivities: parseInt(row.totalActivities) || 0,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            }));
+
+            // Process the parsed data
+            const result = await this.processCsvBatch(
+              batchId,
+              { cases },
+              { ...options, totals: { totalRecords, failedRecords: 0 } }
+            );
+
+            resolve(result);
+          } catch (error) {
+            reject(error);
+          }
+        })
+        .on('error', (error: Error) => {
+          reject(error);
+        });
+    });
+  }
+
   failBatch(batchId: string, errorLogs: Prisma.InputJsonValue) {
     return this.batchService.failBatch(batchId, errorLogs);
   }
@@ -156,6 +223,94 @@ export class ImportService extends BaseService<DailyImportBatchRepository> {
 
   getBatchById(batchId: string, options: { includeErrorDetails?: boolean } = {}) {
     return this.batchService.getBatchById(batchId, options);
+  }
+
+  async queueCsvImport(
+    batchId: string,
+    payload: CaseCsvImportPayload,
+    options: ProcessCsvBatchOptions = {}
+  ) {
+    const jobOptions: CsvImportJobData['options'] = {};
+
+    if (options.chunkSize !== undefined) jobOptions.chunkSize = options.chunkSize;
+    if (options.totals !== undefined) jobOptions.totals = options.totals;
+    if (options.errorDetails !== undefined) jobOptions.errorDetails = options.errorDetails;
+    if (options.errorLogs !== undefined) jobOptions.errorLogs = options.errorLogs;
+    if (options.validationWarnings !== undefined) jobOptions.validationWarnings = options.validationWarnings;
+    if (options.completedAt !== undefined) jobOptions.completedAt = options.completedAt.toISOString();
+
+    const jobData: CsvImportJobData = {
+      batchId,
+      payload,
+      options: jobOptions,
+    };
+
+    const job = await csvImportQueue.add('csv-import', jobData, {
+      priority: 1, // High priority for imports
+      delay: 0, // Start immediately
+    });
+
+    return {
+      jobId: job.id,
+      batchId,
+    };
+  }
+
+  async queueCsvImportWithFile(
+    batchId: string,
+    filePath: string,
+    options: ProcessCsvBatchOptions = {}
+  ) {
+    const jobOptions: CsvImportJobData['options'] = {};
+
+    if (options.chunkSize !== undefined) jobOptions.chunkSize = options.chunkSize;
+    if (options.totals !== undefined) jobOptions.totals = options.totals;
+    if (options.errorDetails !== undefined) jobOptions.errorDetails = options.errorDetails;
+    if (options.errorLogs !== undefined) jobOptions.errorLogs = options.errorLogs;
+    if (options.validationWarnings !== undefined) jobOptions.validationWarnings = options.validationWarnings;
+    if (options.completedAt !== undefined) jobOptions.completedAt = options.completedAt.toISOString();
+
+    const jobData: CsvImportJobData = {
+      batchId,
+      filePath,
+      options: jobOptions,
+    };
+
+    const job = await csvImportQueue.add('csv-import-file', jobData, {
+      priority: 1, // High priority for imports
+      delay: 0, // Start immediately
+    });
+
+    return {
+      jobId: job.id,
+      batchId,
+    };
+  }
+
+  async getJobStatus(jobId: string) {
+    try {
+      const job = await csvImportQueue.getJob(jobId);
+      if (!job) {
+        return null;
+      }
+
+      const state = await job.getState();
+      const progress = job.progress;
+
+      return {
+        jobId,
+        state,
+        progress,
+        data: job.data,
+        opts: job.opts,
+        attemptsMade: job.attemptsMade,
+        finishedOn: job.finishedOn,
+        processedOn: job.processedOn,
+        failedReason: job.failedReason,
+      };
+    } catch (error) {
+      throw new Error(`Failed to get job status: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
   getRecentBatches(limit = 10) {

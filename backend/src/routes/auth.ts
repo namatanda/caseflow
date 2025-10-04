@@ -5,7 +5,7 @@ import {
   type RequestHandler,
   type Response,
 } from 'express';
-import { authenticateToken, requireAdmin } from '@/middleware/auth';
+import { authenticateToken } from '@/middleware/auth';
 import { authRateLimit } from '@/middleware/rateLimit';
 import { authController } from '@/controllers/auth';
 

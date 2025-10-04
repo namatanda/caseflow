@@ -1,19 +1,25 @@
-import type { Request, Response, NextFunction } from 'express';
-import type { Prisma } from '@prisma/client';
-import { CaseStatus } from '@prisma/client';
+import { Request, Response, NextFunction } from 'express';
+import { calculateFileChecksum } from '@/utils/checksum';
+
+// Extend Request interface for multer
+declare global {
+  namespace Express {
+    interface Request {
+      file?: Express.Multer.File;
+      body: any; // Allow any body for form data
+    }
+  }
+}
 
 import {
   importService,
   ImportService,
   type CreateImportBatchInput,
-  type MarkBatchProcessingOptions,
   type ProcessCsvBatchOptions,
 } from '@/services/importService';
 import type { CaseSearchParams } from '@/services/caseService';
 
-const DEFAULT_FILENAME = 'cases.csv';
 const DEFAULT_CREATED_BY = 'system';
-const DEFAULT_FILE_CHECKSUM = 'unknown';
 
 const CSV_HEADERS = [
   'caseNumber',
@@ -37,132 +43,7 @@ const escapeCsvValue = (value: unknown): string => {
   return stringValue;
 };
 
-const isPlainObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
-const isJsonValue = (value: unknown): value is Prisma.InputJsonValue => {
-  if (
-    value === null ||
-    typeof value === 'string' ||
-    typeof value === 'number' ||
-    typeof value === 'boolean'
-  ) {
-    return true;
-  }
-
-  if (Array.isArray(value)) {
-    return value.every(isJsonValue);
-  }
-
-  if (isPlainObject(value)) {
-    return Object.values(value).every(isJsonValue);
-  }
-
-  return false;
-};
-
-const isCaseCreateManyInputArray = (value: unknown): value is Prisma.CaseCreateManyInput[] =>
-  Array.isArray(value) && value.every(isPlainObject);
-
-const isCaseActivityCreateManyInputArray = (value: unknown): value is Prisma.CaseActivityCreateManyInput[] =>
-  Array.isArray(value) && value.every(isPlainObject);
-
-const isCaseJudgeAssignmentCreateManyInputArray = (value: unknown): value is Prisma.CaseJudgeAssignmentCreateManyInput[] =>
-  Array.isArray(value) && value.every(isPlainObject);
-
-const isImportErrorDetailArray = (value: unknown): value is Prisma.ImportErrorDetailCreateManyInput[] =>
-  Array.isArray(value) && value.every(isPlainObject);
-
-const isTotalsInput = (value: unknown): value is { totalRecords?: number; failedRecords?: number } =>
-  isPlainObject(value) &&
-  (typeof value['totalRecords'] === 'undefined' || typeof value['totalRecords'] === 'number') &&
-  (typeof value['failedRecords'] === 'undefined' || typeof value['failedRecords'] === 'number');
-
-type UploadCsvMetadata = {
-  importDate?: string | Date;
-  filename?: string;
-  fileSize?: number;
-  fileChecksum?: string;
-  totalRecords?: number;
-  createdBy?: string;
-  estimatedCompletionTime?: string | Date;
-  userConfig?: Prisma.InputJsonValue;
-  validationWarnings?: Prisma.InputJsonValue;
-  emptyRowsSkipped?: number;
-};
-
-const isUploadCsvMetadata = (value: unknown): value is UploadCsvMetadata =>
-  isPlainObject(value) &&
-  (typeof value['importDate'] === 'undefined' || value['importDate'] instanceof Date || typeof value['importDate'] === 'string') &&
-  (typeof value['filename'] === 'undefined' || typeof value['filename'] === 'string') &&
-  (typeof value['fileSize'] === 'undefined' || typeof value['fileSize'] === 'number') &&
-  (typeof value['fileChecksum'] === 'undefined' || typeof value['fileChecksum'] === 'string') &&
-  (typeof value['totalRecords'] === 'undefined' || typeof value['totalRecords'] === 'number') &&
-  (typeof value['createdBy'] === 'undefined' || typeof value['createdBy'] === 'string') &&
-  (typeof value['estimatedCompletionTime'] === 'undefined' || value['estimatedCompletionTime'] instanceof Date || typeof value['estimatedCompletionTime'] === 'string') &&
-  (typeof value['userConfig'] === 'undefined' || isJsonValue(value['userConfig'])) &&
-  (typeof value['validationWarnings'] === 'undefined' || isJsonValue(value['validationWarnings'])) &&
-  (typeof value['emptyRowsSkipped'] === 'undefined' || typeof value['emptyRowsSkipped'] === 'number');
-
-type UploadCsvPayload = {
-  cases: Prisma.CaseCreateManyInput[];
-  activities?: Prisma.CaseActivityCreateManyInput[];
-  assignments?: Prisma.CaseJudgeAssignmentCreateManyInput[];
-};
-
-const isUploadCsvPayload = (value: unknown): value is UploadCsvPayload =>
-  isPlainObject(value) &&
-  isCaseCreateManyInputArray(value['cases']) &&
-  (typeof value['activities'] === 'undefined' || isCaseActivityCreateManyInputArray(value['activities'])) &&
-  (typeof value['assignments'] === 'undefined' || isCaseJudgeAssignmentCreateManyInputArray(value['assignments']));
-
-type UploadCsvOptions = {
-  chunkSize?: number;
-  skipDuplicates?: boolean;
-  totals?: { totalRecords?: number; failedRecords?: number };
-  errorDetails?: Prisma.ImportErrorDetailCreateManyInput[];
-  errorLogs?: Prisma.InputJsonValue;
-  validationWarnings?: Prisma.InputJsonValue;
-  completedAt?: string | Date;
-};
-
-const isUploadCsvOptions = (value: unknown): value is UploadCsvOptions =>
-  isPlainObject(value) &&
-  (typeof value['chunkSize'] === 'undefined' || typeof value['chunkSize'] === 'number') &&
-  (typeof value['skipDuplicates'] === 'undefined' || typeof value['skipDuplicates'] === 'boolean') &&
-  (typeof value['totals'] === 'undefined' || isTotalsInput(value['totals'])) &&
-  (typeof value['errorDetails'] === 'undefined' || isImportErrorDetailArray(value['errorDetails'])) &&
-  (typeof value['errorLogs'] === 'undefined' || isJsonValue(value['errorLogs'])) &&
-  (typeof value['validationWarnings'] === 'undefined' || isJsonValue(value['validationWarnings'])) &&
-  (typeof value['completedAt'] === 'undefined' || value['completedAt'] instanceof Date || typeof value['completedAt'] === 'string');
-
-type UploadCsvRequestBody = {
-  metadata?: UploadCsvMetadata;
-  payload?: UploadCsvPayload;
-  options?: UploadCsvOptions;
-};
-
-const parseUploadCsvRequestBody = (value: unknown): UploadCsvRequestBody => {
-  if (!isPlainObject(value)) {
-    return {};
-  }
-
-  const result: UploadCsvRequestBody = {};
-
-  if (isUploadCsvMetadata(value['metadata'])) {
-    result.metadata = value['metadata'];
-  }
-
-  if (isUploadCsvPayload(value['payload'])) {
-    result.payload = value['payload'];
-  }
-
-  if (isUploadCsvOptions(value['options'])) {
-    result.options = value['options'];
-  }
-
-  return result;
-};
 
 const parseDate = (value: unknown): Date | undefined => {
   if (typeof value === 'string' || value instanceof Date) {
@@ -174,7 +55,7 @@ const parseDate = (value: unknown): Date | undefined => {
   return undefined;
 };
 
-const toCaseSearchParams = (query: Request['query']): CaseSearchParams => {
+const toCaseSearchParams = (query: any): CaseSearchParams => {
   const params: CaseSearchParams = {};
 
   if (typeof query['courtName'] === 'string') {
@@ -185,8 +66,8 @@ const toCaseSearchParams = (query: Request['query']): CaseSearchParams => {
     params.caseTypeId = query['caseTypeId'];
   }
 
-  if (typeof query['status'] === 'string' && query['status'] in CaseStatus) {
-    params.status = query['status'] as CaseStatus;
+  if (typeof query['status'] === 'string') {
+    params.status = query['status'] as any;
   }
 
   const filedFrom = parseDate(query['filedFrom']);
@@ -207,30 +88,48 @@ export class ImportController {
 
   async uploadCsv(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { metadata = {}, payload, options = {} } = parseUploadCsvRequestBody(req.body);
-
-      if (!payload) {
-        res.status(400).json({ message: 'CSV payload must include at least one case record.' });
+      // Check if file was uploaded
+      if (!req.file) {
+        res.status(400).json({ message: 'CSV file is required.' });
         return;
       }
 
-      if (payload['cases'].length === 0) {
-        res.status(400).json({ message: 'CSV payload must include at least one case record.' });
-        return;
+      // Parse metadata and options from form data (they come as strings)
+      let metadata: Record<string, unknown> = {};
+      let options: Record<string, unknown> = {};
+
+      try {
+        if (req.body.metadata) {
+          metadata = JSON.parse(req.body.metadata);
+        }
+      } catch (error) {
+        // Invalid JSON, use empty object
+      }
+
+      try {
+        if (req.body.options) {
+          options = JSON.parse(req.body.options);
+        }
+      } catch (error) {
+        // Invalid JSON, use empty object
       }
 
       const importDate = parseDate(metadata['importDate']) ?? new Date();
-      const totalRecords = typeof metadata['totalRecords'] === 'number' ? metadata['totalRecords'] : payload['cases'].length;
-      const fileSize = typeof metadata['fileSize'] === 'number' ? metadata['fileSize'] : payload['cases'].length;
-  const createdBy = typeof metadata['createdBy'] === 'string' ? metadata['createdBy'] : DEFAULT_CREATED_BY;
-  const estimatedCompletionTime = parseDate(metadata['estimatedCompletionTime']);
+      const fileSize = req.file.size;
+      const createdBy = typeof metadata['createdBy'] === 'string' ? metadata['createdBy'] : DEFAULT_CREATED_BY;
+      const estimatedCompletionTime = parseDate(metadata['estimatedCompletionTime']);
 
+      // Calculate file checksum
+      const checksumResult = await calculateFileChecksum(req.file.path, 'md5');
+
+      // For now, we'll set totalRecords to 0 and update it after parsing
+      // The worker will update this after reading the file
       const batchInput: CreateImportBatchInput = {
         importDate,
-        filename: typeof metadata['filename'] === 'string' ? metadata['filename'] : DEFAULT_FILENAME,
+        filename: req.file.originalname,
         fileSize,
-        fileChecksum: typeof metadata['fileChecksum'] === 'string' ? metadata['fileChecksum'] : DEFAULT_FILE_CHECKSUM,
-        totalRecords,
+        fileChecksum: checksumResult.checksum,
+        totalRecords: 0, // Will be updated by worker
         createdBy,
       };
 
@@ -249,34 +148,13 @@ export class ImportController {
 
       const batch = await this.service.createBatch(batchInput);
 
-      const processingOptions: MarkBatchProcessingOptions = {
-        processingStartTime: new Date(),
-      };
-
-      if (estimatedCompletionTime) {
-        processingOptions.estimatedCompletionTime = estimatedCompletionTime;
-      }
-
-      await this.service.markBatchProcessing(batch.id, processingOptions);
-
+      // Queue the CSV processing job with file path
       const processOptions: ProcessCsvBatchOptions = {};
       if (typeof options['chunkSize'] === 'number') {
         processOptions.chunkSize = options['chunkSize'];
       }
-      const totalsOptions = options['totals'];
-      if (totalsOptions) {
-        const totals: NonNullable<ProcessCsvBatchOptions['totals']> = {
-          totalRecords: typeof totalsOptions['totalRecords'] === 'number' ? totalsOptions['totalRecords'] : totalRecords,
-        };
-
-        if (typeof totalsOptions['failedRecords'] === 'number') {
-          totals.failedRecords = totalsOptions['failedRecords'];
-        }
-
-        processOptions.totals = totals;
-      }
       if (options['errorDetails']) {
-        processOptions.errorDetails = options['errorDetails'];
+        processOptions.errorDetails = options['errorDetails'] as any;
       }
       if (typeof options['errorLogs'] !== 'undefined') {
         processOptions.errorLogs = options['errorLogs'];
@@ -290,20 +168,17 @@ export class ImportController {
         processOptions.completedAt = completedAt;
       }
 
-      const importResult = await this.service.processCsvBatch(
+      const jobResult = await this.service.queueCsvImportWithFile(
         batch.id,
-        {
-          cases: payload['cases'],
-          ...(payload['activities'] ? { activities: payload['activities'] } : {}),
-          ...(payload['assignments'] ? { assignments: payload['assignments'] } : {}),
-        },
+        req.file.path,
         processOptions
       );
 
       res.status(202).json({
         batchId: batch.id,
-        status: 'completed',
-        result: importResult,
+        jobId: jobResult.jobId,
+        status: 'queued',
+        message: 'CSV import job has been queued for processing',
       });
     } catch (error) {
       next(error);
@@ -312,14 +187,14 @@ export class ImportController {
 
   async getBatchStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-  const batchId = req.params['batchId'];
+   const batchId = req.params['batchId'];
       if (!batchId) {
         res.status(400).json({ message: 'Batch ID is required.' });
         return;
       }
 
       const batch = await this.service.getBatchById(batchId, {
-  includeErrorDetails: req.query['includeErrors'] === 'true',
+   includeErrorDetails: req.query['includeErrors'] === 'true',
       });
 
       if (!batch) {
@@ -328,6 +203,26 @@ export class ImportController {
       }
 
       res.status(200).json(batch);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getJobStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const jobId = req.params['jobId'];
+      if (!jobId) {
+        res.status(400).json({ message: 'Job ID is required.' });
+        return;
+      }
+
+      const jobStatus = await this.service.getJobStatus(jobId);
+      if (!jobStatus) {
+        res.status(404).json({ message: `Job ${jobId} not found.` });
+        return;
+      }
+
+      res.status(200).json(jobStatus);
     } catch (error) {
       next(error);
     }

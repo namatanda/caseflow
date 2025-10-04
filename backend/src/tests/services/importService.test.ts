@@ -38,6 +38,23 @@ vi.mock('@/utils/logger', () => ({
   }),
 }));
 
+const {
+  csvImportQueueMock,
+} = vi.hoisted(() => {
+  const csvImportQueueMock = {
+    add: vi.fn(),
+    getJob: vi.fn(),
+  };
+
+  return {
+    csvImportQueueMock,
+  };
+});
+
+vi.mock('@/config/queue', () => ({
+  csvImportQueue: csvImportQueueMock,
+}));
+
 import { ImportService, type ProcessCsvBatchOptions } from '../../services/importService';
 
 const createService = () =>
@@ -273,5 +290,176 @@ describe('ImportService', () => {
 
     expect(batchServiceMock.getRecentBatches).toHaveBeenCalledWith(5);
     expect(result).toBe(expected);
+  });
+
+  it('queues CSV import with payload data', async () => {
+    const service = createService();
+    const batchId = 'batch-1';
+    const payload = {
+      cases: [{ id: 'case-1', caseNumber: 'CASE-001' }],
+      activities: [],
+      assignments: [],
+    };
+    const options: ProcessCsvBatchOptions = {
+      chunkSize: 100,
+      errorLogs: ['test error'],
+    };
+
+    const mockJob = { id: 'job-1' };
+    vi.mocked(csvImportQueueMock.add).mockResolvedValue(mockJob);
+
+    const result = await service.queueCsvImport(batchId, payload, options);
+
+    expect(csvImportQueueMock.add).toHaveBeenCalledWith('csv-import', {
+      batchId,
+      payload,
+      options: {
+        chunkSize: 100,
+        errorLogs: ['test error'],
+        totals: undefined,
+        errorDetails: undefined,
+        validationWarnings: undefined,
+        completedAt: undefined,
+      },
+    }, {
+      priority: 1,
+      delay: 0,
+    });
+
+    expect(result).toEqual({
+      jobId: 'job-1',
+      batchId: 'batch-1',
+    });
+  });
+
+  it('queues CSV import with file path', async () => {
+    const service = createService();
+    const batchId = 'batch-1';
+    const filePath = '/temp/test.csv';
+    const options: ProcessCsvBatchOptions = {
+      chunkSize: 200,
+      totals: { totalRecords: 100, failedRecords: 5 },
+    };
+
+    const mockJob = { id: 'job-2' };
+    vi.mocked(csvImportQueueMock.add).mockResolvedValue(mockJob);
+
+    const result = await service.queueCsvImportWithFile(batchId, filePath, options);
+
+    expect(csvImportQueueMock.add).toHaveBeenCalledWith('csv-import-file', {
+      batchId,
+      filePath,
+      options: {
+        chunkSize: 200,
+        totals: { totalRecords: 100, failedRecords: 5 },
+        errorDetails: undefined,
+        errorLogs: undefined,
+        validationWarnings: undefined,
+        completedAt: undefined,
+      },
+    }, {
+      priority: 1,
+      delay: 0,
+    });
+
+    expect(result).toEqual({
+      jobId: 'job-2',
+      batchId: 'batch-1',
+    });
+  });
+
+  it('queues CSV import with file path and completedAt date', async () => {
+    const service = createService();
+    const batchId = 'batch-1';
+    const filePath = '/temp/test.csv';
+    const completedAt = new Date('2024-01-01T10:00:00Z');
+    const options: ProcessCsvBatchOptions = {
+      completedAt,
+    };
+
+    const mockJob = { id: 'job-3' };
+    vi.mocked(csvImportQueueMock.add).mockResolvedValue(mockJob);
+
+    const result = await service.queueCsvImportWithFile(batchId, filePath, options);
+
+    expect(csvImportQueueMock.add).toHaveBeenCalledWith('csv-import-file', {
+      batchId,
+      filePath,
+      options: {
+        chunkSize: undefined,
+        totals: undefined,
+        errorDetails: undefined,
+        errorLogs: undefined,
+        validationWarnings: undefined,
+        completedAt: completedAt.toISOString(),
+      },
+    }, {
+      priority: 1,
+      delay: 0,
+    });
+
+    expect(result).toEqual({
+      jobId: 'job-3',
+      batchId: 'batch-1',
+    });
+  });
+
+  it('gets job status successfully', async () => {
+    const service = createService();
+    const jobId = 'job-1';
+
+    const mockJob = {
+      id: jobId,
+      getState: vi.fn().mockResolvedValue('completed'),
+      progress: 100,
+      data: { batchId: 'batch-1' },
+      opts: { priority: 1 },
+      attemptsMade: 1,
+      finishedOn: 1234567890,
+      processedOn: 1234567800,
+      failedReason: null,
+    };
+
+    vi.mocked(csvImportQueueMock.getJob).mockResolvedValue(mockJob);
+
+    const result = await service.getJobStatus(jobId);
+
+    expect(csvImportQueueMock.getJob).toHaveBeenCalledWith(jobId);
+    expect(mockJob.getState).toHaveBeenCalled();
+    expect(result).toEqual({
+      jobId,
+      state: 'completed',
+      progress: 100,
+      data: { batchId: 'batch-1' },
+      opts: { priority: 1 },
+      attemptsMade: 1,
+      finishedOn: 1234567890,
+      processedOn: 1234567800,
+      failedReason: null,
+    });
+  });
+
+  it('returns null when job does not exist', async () => {
+    const service = createService();
+    const jobId = 'non-existent-job';
+
+    vi.mocked(csvImportQueueMock.getJob).mockResolvedValue(null);
+
+    const result = await service.getJobStatus(jobId);
+
+    expect(csvImportQueueMock.getJob).toHaveBeenCalledWith(jobId);
+    expect(result).toBeNull();
+  });
+
+  it('throws error when getting job status fails', async () => {
+    const service = createService();
+    const jobId = 'job-1';
+    const error = new Error('Queue connection failed');
+
+    vi.mocked(csvImportQueueMock.getJob).mockRejectedValue(error);
+
+    await expect(service.getJobStatus(jobId)).rejects.toThrow(
+      'Failed to get job status: Queue connection failed'
+    );
   });
 });
