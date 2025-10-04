@@ -1,4 +1,5 @@
 import { UserRole } from '@prisma/client';
+import { randomBytes } from 'crypto';
 
 import { UserRepository, userRepository } from '@/repositories/userRepository';
 import { hashPassword, verifyPassword, validatePasswordStrength } from '@/utils/auth';
@@ -8,6 +9,7 @@ import { BaseService, type ServiceContext } from './baseService';
 import { UnauthorizedError, ValidationError, NotFoundError } from './errors';
 import { logger, auditLogger } from '@/utils/logger';
 import { tokenBlacklistService } from './tokenBlacklistService';
+import { cacheManager, sessionManager } from '@/config/redis';
 
 export interface LoginCredentials {
   email: string;
@@ -24,6 +26,7 @@ export interface RegisterData {
 export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
+  sessionId?: string;
   user: {
     id: string;
     email: string;
@@ -35,6 +38,15 @@ export interface AuthTokens {
 export interface RefreshTokenData {
   accessToken: string;
   refreshToken: string;
+}
+
+export interface PasswordResetRequest {
+  email: string;
+}
+
+export interface PasswordResetData {
+  token: string;
+  newPassword: string;
 }
 
 export class AuthService extends BaseService<UserRepository> {
@@ -96,12 +108,27 @@ export class AuthService extends BaseService<UserRepository> {
         name: user.name,
       });
 
-      logger.info('User logged in successfully', { userId: user.id, email });
-      auditLogger.loginSuccess(user.id, 'unknown');
+      // Create user session
+      const sessionId = `session_${user.id}_${Date.now()}`;
+      const sessionCreated = await sessionManager.createSession(sessionId, user.id, {
+        email: user.email,
+        role: user.role,
+        name: user.name,
+        ip: 'unknown', // Will be set by middleware
+        userAgent: 'unknown', // Will be set by middleware
+      });
+
+      if (!sessionCreated) {
+        logger.warn('Failed to create user session', { userId: user.id });
+      }
+
+      logger.info('User logged in successfully', { userId: user.id, email, sessionId });
+      auditLogger.loginSuccess(user.id, 'unknown', undefined, this.context.correlationId);
 
       return {
         accessToken,
         refreshToken,
+        sessionId,
         user: {
           id: user.id,
           email: user.email,
@@ -173,12 +200,27 @@ export class AuthService extends BaseService<UserRepository> {
         name: user.name,
       });
 
-      logger.info('User registered successfully', { userId: user.id, email });
-      auditLogger.registration(user.id, user.email, 'unknown');
+      // Create user session
+      const sessionId = `session_${user.id}_${Date.now()}`;
+      const sessionCreated = await sessionManager.createSession(sessionId, user.id, {
+        email: user.email,
+        role: user.role,
+        name: user.name,
+        ip: 'unknown', // Will be set by middleware
+        userAgent: 'unknown', // Will be set by middleware
+      });
+
+      if (!sessionCreated) {
+        logger.warn('Failed to create user session during registration', { userId: user.id });
+      }
+
+      logger.info('User registered successfully', { userId: user.id, email, sessionId });
+      auditLogger.registration(user.id, user.email, 'unknown', this.context.correlationId);
 
       return {
         accessToken,
         refreshToken,
+        sessionId,
         user: {
           id: user.id,
           email: user.email,
@@ -244,8 +286,14 @@ export class AuthService extends BaseService<UserRepository> {
    */
   async logout(userId: string, accessToken?: string): Promise<void> {
     try {
+      // Delete all user sessions
+      const sessionsDeleted = await sessionManager.deleteUserSessions(userId);
+      if (!sessionsDeleted) {
+        logger.warn('Failed to delete user sessions during logout', { userId });
+      }
+
       logger.info('User logged out', { userId });
-      auditLogger.logout(userId, 'unknown');
+      auditLogger.logout(userId, 'unknown', undefined, this.context.correlationId);
 
       // Blacklist the access token if provided (non-blocking)
       if (accessToken) {
@@ -255,10 +303,6 @@ export class AuthService extends BaseService<UserRepository> {
           logger.warn('Failed to blacklist token during logout', { userId, error: error instanceof Error ? error.message : 'Unknown error' });
         }
       }
-
-      // In a more sophisticated system, you might also:
-      // 1. Clear any server-side sessions
-      // 2. Log the logout event for security auditing
     } catch (error) {
       logger.error('Logout error', { userId, error: error instanceof Error ? error.message : 'Unknown error' });
       // Don't throw error for logout failures
@@ -299,6 +343,12 @@ export class AuthService extends BaseService<UserRepository> {
         data: { password: hashedNewPassword } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
       }); // eslint-disable-line @typescript-eslint/no-unsafe-assignment
 
+      // Delete all user sessions (force logout from all devices)
+      const sessionsDeleted = await sessionManager.deleteUserSessions(userId);
+      if (!sessionsDeleted) {
+        logger.warn('Failed to delete user sessions after password change', { userId });
+      }
+
       // Blacklist all existing tokens for this user (non-blocking)
       try {
         await tokenBlacklistService.blacklistAllUserTokens(userId);
@@ -307,7 +357,7 @@ export class AuthService extends BaseService<UserRepository> {
       }
 
       logger.info('Password changed successfully', { userId });
-      auditLogger.passwordChange(userId, 'unknown');
+      auditLogger.passwordChange(userId, 'unknown', undefined, this.context.correlationId);
     } catch (error) {
       if (error instanceof ValidationError || error instanceof UnauthorizedError) {
         throw error;
@@ -315,6 +365,117 @@ export class AuthService extends BaseService<UserRepository> {
 
       logger.error('Password change error', { userId, error: error instanceof Error ? error.message : 'Unknown error' });
       throw new ValidationError('Password change failed', []);
+    }
+  }
+
+  /**
+   * Request password reset
+   */
+  async requestPasswordReset(request: PasswordResetRequest): Promise<void> {
+    const { email } = request;
+
+    try {
+      // Find user by email
+      const user = await this.repository.findByEmail(email);
+      if (!user) {
+        // Don't reveal if email exists or not for security
+        logger.info('Password reset requested for non-existent email', { email });
+        return;
+      }
+
+      // Generate reset token (store in Redis with expiration)
+      const resetToken = randomBytes(32).toString('hex');
+      const resetKey = `password_reset:${resetToken}`;
+
+      // Store token with user ID and expiration (15 minutes)
+      await cacheManager.set(resetKey, { userId: user.id }, 15 * 60);
+
+      // TODO: Send email with reset token
+      // For now, just log it (in production, this would send an email)
+      logger.info('Password reset token generated', {
+        userId: user.id,
+        email,
+        resetToken,
+        expiresIn: '15 minutes'
+      });
+
+      auditLogger.passwordReset(user.id, 'unknown', undefined, this.context.correlationId);
+    } catch (error) {
+      logger.error('Password reset request error', {
+        email,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      throw new ValidationError('Failed to process password reset request', []);
+    }
+  }
+
+  /**
+   * Reset password using token
+   */
+  async resetPassword(data: PasswordResetData): Promise<void> {
+    const { token, newPassword } = data;
+
+    try {
+      // Get reset data from cache
+      const resetKey = `password_reset:${token}`;
+      const resetData = await cacheManager.get<{ userId: string }>(resetKey);
+
+      if (!resetData) {
+        throw new ValidationError('Invalid or expired reset token', []);
+      }
+
+      // Find user
+      const user = await this.repository.findByIdWithPassword(resetData.userId);
+      if (!user) {
+        throw new ValidationError('User not found', []);
+      }
+
+      // Validate new password strength
+      const passwordValidation = validatePasswordStrength(newPassword);
+      if (!passwordValidation.isValid) {
+        throw new ValidationError(`New password validation failed: ${passwordValidation.errors.join(', ')}`, []);
+      }
+
+      // Hash new password
+      const hashedNewPassword = await hashPassword(newPassword);
+
+      // Update password
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
+      await this.repository.update({ // eslint-disable-line @typescript-eslint/no-unsafe-assignment
+        where: { id: user.id },
+        data: { password: hashedNewPassword } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+      }); // eslint-disable-line @typescript-eslint/no-unsafe-assignment
+
+      // Delete all user sessions (force logout from all devices)
+      const sessionsDeleted = await sessionManager.deleteUserSessions(user.id);
+      if (!sessionsDeleted) {
+        logger.warn('Failed to delete user sessions after password reset', { userId: user.id });
+      }
+
+      // Delete the reset token
+      await cacheManager.del(resetKey);
+
+      // Blacklist all existing tokens for this user (non-blocking)
+      try {
+        await tokenBlacklistService.blacklistAllUserTokens(user.id);
+      } catch (error) {
+        logger.warn('Failed to blacklist all user tokens after password reset', {
+          userId: user.id,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+
+      logger.info('Password reset successfully', { userId: user.id });
+      auditLogger.passwordReset(user.id, 'unknown', undefined, this.context.correlationId);
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        throw error;
+      }
+
+      logger.error('Password reset error', {
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      throw new ValidationError('Failed to reset password', []);
     }
   }
 

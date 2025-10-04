@@ -236,7 +236,7 @@ router.post('/logout', authenticateToken, asyncHandler(authController.logout.bin
 
 /**
  * @swagger
- * /auth/profile:
+ * /auth/me:
  *   get:
  *     summary: Get current user profile
  *     tags: [Authentication]
@@ -283,6 +283,59 @@ router.post('/logout', authenticateToken, asyncHandler(authController.logout.bin
  *       401:
  *         description: Authentication required
  */
+router.get('/me', authenticateToken, asyncHandler(authController.getProfile.bind(authController)));
+
+/**
+ * @swagger
+ * /auth/profile:
+ *   get:
+ *     summary: Get current user profile (deprecated - use /auth/me)
+ *     tags: [Authentication]
+ *     deprecated: true
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Profile retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Profile retrieved successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                       example: uuid
+ *                     email:
+ *                       type: string
+ *                       example: user@example.com
+ *                     name:
+ *                       type: string
+ *                       example: John Doe
+ *                     role:
+ *                       type: string
+ *                       enum: [ADMIN, DATA_ENTRY, VIEWER]
+ *                       example: DATA_ENTRY
+ *                     isActive:
+ *                       type: boolean
+ *                       example: true
+ *                     createdAt:
+ *                       type: string
+ *                       format: date-time
+ *                       example: 2024-01-01T00:00:00.000Z
+ *                     updatedAt:
+ *                       type: string
+ *                       format: date-time
+ *                       example: 2024-01-01T00:00:00.000Z
+ *       401:
+ *         description: Authentication required
+ */
+// Keep /profile for backward compatibility
 router.get('/profile', authenticateToken, asyncHandler(authController.getProfile.bind(authController)));
 
 /**
@@ -329,5 +382,81 @@ router.get('/profile', authenticateToken, asyncHandler(authController.getProfile
  *         description: New password validation failed
  */
 router.post('/change-password', authenticateToken, asyncHandler(authController.changePassword.bind(authController)));
+
+/**
+ * @swagger
+ * /auth/forgot-password:
+ *   post:
+ *     summary: Request password reset
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: user@example.com
+ *     responses:
+ *       200:
+ *         description: Password reset request processed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: If an account with that email exists, a password reset link has been sent.
+ *       400:
+ *         description: Invalid request data
+ */
+router.post('/forgot-password', asyncHandler(authController.requestPasswordReset.bind(authController)));
+
+/**
+ * @swagger
+ * /auth/reset-password:
+ *   post:
+ *     summary: Reset password using token
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - token
+ *               - newPassword
+ *             properties:
+ *               token:
+ *                 type: string
+ *                 example: abc123def456
+ *               newPassword:
+ *                 type: string
+ *                 minLength: 8
+ *                 example: NewSecurePass123!
+ *     responses:
+ *       200:
+ *         description: Password reset successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Password reset successfully
+ *       400:
+ *         description: Invalid request data
+ *       422:
+ *         description: New password validation failed
+ */
+router.post('/reset-password', asyncHandler(authController.resetPassword.bind(authController)));
 
 export default router;

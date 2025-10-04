@@ -13,7 +13,7 @@ const buildServiceContext = (req: Request): Record<string, unknown> => {
 };
 
 export class AuthController {
-  constructor(private readonly service = new AuthService()) {}
+  constructor() {}
 
   /**
    * Login endpoint
@@ -244,6 +244,80 @@ export class AuthController {
     } catch (error) {
       logger.warn('Password change failed', {
         userId: req.user?.id,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        correlationId: req.correlationId,
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Request password reset endpoint
+   * POST /auth/forgot-password
+   */
+  async requestPasswordReset(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { email } = req.body;
+
+      if (!email) {
+        res.status(400).json({
+          message: 'Email is required',
+        });
+        return;
+      }
+
+      // Create service instance with request context
+      const service = new AuthService(undefined, undefined, buildServiceContext(req));
+
+      await service.requestPasswordReset({ email });
+
+      logger.info('Password reset requested', {
+        email,
+        correlationId: req.correlationId,
+      });
+
+      res.status(200).json({
+        message: 'If an account with that email exists, a password reset link has been sent.',
+      });
+    } catch (error) {
+      logger.warn('Password reset request failed', {
+        email: req.body.email,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        correlationId: req.correlationId,
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Reset password endpoint
+   * POST /auth/reset-password
+   */
+  async resetPassword(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { token, newPassword } = req.body;
+
+      if (!token || !newPassword) {
+        res.status(400).json({
+          message: 'Reset token and new password are required',
+        });
+        return;
+      }
+
+      // Create service instance with request context
+      const service = new AuthService(undefined, undefined, buildServiceContext(req));
+
+      await service.resetPassword({ token, newPassword });
+
+      logger.info('Password reset successfully', {
+        correlationId: req.correlationId,
+      });
+
+      res.status(200).json({
+        message: 'Password reset successfully',
+      });
+    } catch (error) {
+      logger.warn('Password reset failed', {
         error: error instanceof Error ? error.message : 'Unknown error',
         correlationId: req.correlationId,
       });

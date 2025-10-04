@@ -180,6 +180,17 @@ export const auditLogger = {
     });
   },
 
+  passwordReset: (userId: string, ip: string, userAgent?: string, correlationId?: string) => {
+    auditLogger.log({
+      event: 'PASSWORD_RESET',
+      userId,
+      ip,
+      userAgent,
+      outcome: 'success',
+      correlationId,
+    });
+  },
+
   registration: (userId: string, email: string, ip: string, userAgent?: string, correlationId?: string) => {
     auditLogger.log({
       event: 'USER_REGISTRATION',

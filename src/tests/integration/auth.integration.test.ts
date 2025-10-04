@@ -128,6 +128,7 @@ describe('AuthService', () => {
       expect(result).toEqual({
         accessToken: 'mock-access-token',
         refreshToken: 'mock-refresh-token',
+        sessionId: expect.any(String),
         user: {
           id: mockUser.id,
           email: mockUser.email,
@@ -236,6 +237,7 @@ describe('AuthService', () => {
       expect(result).toEqual({
         accessToken: 'mock-access-token',
         refreshToken: 'mock-refresh-token',
+        sessionId: expect.any(String),
         user: {
           id: mockUser.id,
           email: mockUser.email,
