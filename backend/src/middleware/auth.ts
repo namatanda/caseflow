@@ -4,20 +4,7 @@ import { config } from '@/config/environment';
 import { AuthenticationError, AuthorizationError } from './errorHandler';
 import { logger } from '@/utils/logger';
 import { tokenBlacklistService } from '@/services/tokenBlacklistService';
-
-// Extend Request interface to include user information
-declare module 'express-serve-static-core' {
-  interface Request {
-    user?: AuthenticatedUser;
-  }
-}
-
-type AuthenticatedUser = {
-  id: string;
-  email: string;
-  role: string;
-  name?: string;
-};
+import type { AuthenticatedUser } from '@/types/auth';
 
 export interface JwtPayload {
   id: string;

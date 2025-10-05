@@ -1,0 +1,97 @@
+name: Backend Deploy
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-deploy.yml"
+  workflow_dispatch:
+
+jobs:
+  test-build-push:
+    name: Test, Build & Publish Backend Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    env:
+      DATABASE_URL: "file:./test.db"
+      NODE_ENV: test
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: backend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: backend
+        run: pnpm install --frozen-lockfile
+
+      - name: Run lint checks
+        working-directory: backend
+        run: pnpm run lint
+
+      - name: Run unit tests
+        working-directory: backend
+        run: pnpm run test -- --runInBand
+
+      - name: Build production bundle
+        working-directory: backend
+        run: pnpm run build
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          file: backend/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/backend:latest
+            ghcr.io/${{ github.repository }}/backend:${{ github.sha }}
+          build-args: |
+            COMMIT_SHA=${{ github.sha }}
+
+  deploy:
+    name: Deploy Backend
+    needs: test-build-push
+    runs-on: ubuntu-latest
+    if: ${{ github.ref == 'refs/heads/main' && secrets.BACKEND_DEPLOY_HOST != '' }}
+    environment:
+      name: production
+
+    steps:
+      - name: Deploy to remote host
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.BACKEND_DEPLOY_HOST }}
+          username: ${{ secrets.BACKEND_DEPLOY_USER }}
+          key: ${{ secrets.BACKEND_DEPLOY_KEY }}
+          port: ${{ secrets.BACKEND_DEPLOY_PORT || '22' }}
+          envs: IMAGE_TAG=${{ github.sha }}
+          script: |
+            docker login ghcr.io -u "${{ github.actor }}" -p "${{ secrets.GITHUB_TOKEN }}"
+            cd ${{ secrets.BACKEND_DEPLOY_PATH }}
+            docker compose pull backend
+            docker compose up -d backend
+            docker image prune -f

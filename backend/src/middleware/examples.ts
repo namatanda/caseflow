@@ -6,7 +6,7 @@
  * when implementing API routes.
  */
 
-import { Router } from 'express';
+import { Router, type Router as RouterType } from 'express';
 import {
   authenticateToken,
   optionalAuth,
@@ -19,7 +19,7 @@ import {
   requestSizeLimit
 } from './index';
 
-const router = Router();
+const router: RouterType = Router();
 
 // Example 1: Public endpoint with optional authentication
 router.get('/public-data', optionalAuth, (_req, res) => {

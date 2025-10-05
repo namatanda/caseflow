@@ -3,11 +3,12 @@ import {
 	type NextFunction,
 	type Request,
 	type RequestHandler,
-	type Response
+	type Response,
+	type Router as RouterType
 } from 'express';
 import { systemController } from '@/controllers/system';
 
-const router = Router();
+const router: RouterType = Router();
 
 type AsyncHandler = (
 	req: Request,

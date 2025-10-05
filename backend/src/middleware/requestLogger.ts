@@ -2,13 +2,6 @@ import { Request, Response, NextFunction } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '@/utils/logger';
 
-declare module 'express-serve-static-core' {
-  interface Request {
-    correlationId?: string;
-    startTime?: number;
-  }
-}
-
 const getCorrelationId = (req: Request): string => req.correlationId ?? uuidv4();
 
 const getPayloadSize = (body: unknown): number => {

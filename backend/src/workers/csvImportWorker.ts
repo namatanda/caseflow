@@ -9,7 +9,6 @@ import {
   csvImportDuration,
   csvImportRecords,
   csvImportBatchSize,
-  csvImportRowProcessingDuration,
   csvImportMemoryUsage,
   csvImportErrorsTotal,
   csvImportThroughput,

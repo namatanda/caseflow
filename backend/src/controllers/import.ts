@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { calculateFileChecksum } from '@/utils/checksum';
+import { Prisma } from '@prisma/client';
 
 // Extend Request interface for multer
 declare global {
@@ -136,11 +137,11 @@ export class ImportController {
       if (estimatedCompletionTime) {
         batchInput.estimatedCompletionTime = estimatedCompletionTime;
       }
-      if (typeof metadata['userConfig'] !== 'undefined') {
-        batchInput.userConfig = metadata['userConfig'];
+      if (metadata['userConfig'] !== undefined && metadata['userConfig'] !== null) {
+        batchInput.userConfig = metadata['userConfig'] as Prisma.InputJsonValue;
       }
-      if (typeof metadata['validationWarnings'] !== 'undefined') {
-        batchInput.validationWarnings = metadata['validationWarnings'];
+      if (metadata['validationWarnings'] !== undefined && metadata['validationWarnings'] !== null) {
+        batchInput.validationWarnings = metadata['validationWarnings'] as Prisma.InputJsonValue;
       }
       if (typeof metadata['emptyRowsSkipped'] === 'number') {
         batchInput.emptyRowsSkipped = metadata['emptyRowsSkipped'];
@@ -153,14 +154,14 @@ export class ImportController {
       if (typeof options['chunkSize'] === 'number') {
         processOptions.chunkSize = options['chunkSize'];
       }
-      if (options['errorDetails']) {
-        processOptions.errorDetails = options['errorDetails'] as any;
+      if (Array.isArray(options['errorDetails'])) {
+        processOptions.errorDetails = options['errorDetails'] as Prisma.ImportErrorDetailCreateManyInput[];
       }
-      if (typeof options['errorLogs'] !== 'undefined') {
-        processOptions.errorLogs = options['errorLogs'];
+      if (options['errorLogs'] !== undefined && options['errorLogs'] !== null) {
+        processOptions.errorLogs = options['errorLogs'] as Prisma.InputJsonValue;
       }
-      if (typeof options['validationWarnings'] !== 'undefined') {
-        processOptions.validationWarnings = options['validationWarnings'];
+      if (options['validationWarnings'] !== undefined && options['validationWarnings'] !== null) {
+        processOptions.validationWarnings = options['validationWarnings'] as Prisma.InputJsonValue;
       }
 
       const completedAt = parseDate(options['completedAt']);

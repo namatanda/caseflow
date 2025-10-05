@@ -9,10 +9,10 @@ export function metricsMiddleware(req: Request, res: Response, next: NextFunctio
   const start = Date.now();
   
   // Store original end function
-  const originalEnd = res.end;
+  const originalEnd = res.end.bind(res);
   
   // Override end function to capture metrics
-  res.end = function (this: Response, ...args: any[]): Response {
+  const monitoredEnd = ((...args: Parameters<Response['end']>) => {
     // Calculate duration in seconds
     const duration = (Date.now() - start) / 1000;
     
@@ -54,8 +54,10 @@ export function metricsMiddleware(req: Request, res: Response, next: NextFunctio
     }
     
     // Call original end function
-    return originalEnd.call(this, ...args);
-  };
+    return originalEnd(...args);
+  }) as Response['end'];
+  
+  res.end = monitoredEnd;
   
   next();
 }

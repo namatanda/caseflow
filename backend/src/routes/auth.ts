@@ -4,6 +4,7 @@ import {
   type Request,
   type RequestHandler,
   type Response,
+  type Router as RouterType,
 } from 'express';
 import { authenticateToken } from '@/middleware/auth';
 import { authRateLimit } from '@/middleware/rateLimit';
@@ -17,7 +18,7 @@ const asyncHandler = (handler: AsyncHandler): RequestHandler => {
   };
 };
 
-const router = Router();
+const router: RouterType = Router();
 
 // Apply strict rate limiting to all auth endpoints
 router.use(authRateLimit);

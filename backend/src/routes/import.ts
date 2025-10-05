@@ -4,6 +4,7 @@ import {
   type Request,
   type RequestHandler,
   type Response,
+  type Router as RouterType,
 } from 'express';
 
 import { requireRole } from '@/middleware/auth';
@@ -11,7 +12,7 @@ import { uploadRateLimit, searchRateLimit } from '@/middleware/rateLimit';
 import { uploadCsv } from '@/middleware/upload';
 import { importController } from '@/controllers/import';
 
-const router = Router();
+const router: RouterType = Router();
 
 type AsyncHandler = (req: Request, res: Response, next: NextFunction) => Promise<unknown> | void;
 

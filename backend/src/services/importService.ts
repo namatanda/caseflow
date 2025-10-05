@@ -162,7 +162,7 @@ export class ImportService extends BaseService<DailyImportBatchRepository> {
       const results: any[] = [];
       let totalRecords = 0;
 
-      const stream = fs.createReadStream(filePath)
+      fs.createReadStream(filePath)
         .pipe(csv.default())
         .on('data', (data: any) => {
           results.push(data);

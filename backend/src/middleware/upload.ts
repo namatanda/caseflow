@@ -1,4 +1,5 @@
 import multer from 'multer';
+import type { RequestHandler } from 'express';
 import path from 'path';
 import fs from 'fs/promises';
 import { config } from '@/config/environment';
@@ -26,7 +27,7 @@ async function ensureDirectoriesExist() {
 ensureDirectoriesExist().catch(console.error);
 
 // File filter for CSV files
-const csvFileFilter = (req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+const csvFileFilter = (_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
   // Check file extension
   const ext = path.extname(file.originalname).toLowerCase();
   if (ext !== '.csv') {
@@ -44,7 +45,7 @@ const csvFileFilter = (req: Express.Request, file: Express.Multer.File, cb: mult
 
 // Storage configuration for temp files
 const tempStorage = multer.diskStorage({
-  destination: async (req, file, cb) => {
+  destination: async (_req, _file, cb) => {
     try {
       await ensureDirectoriesExist();
       cb(null, TEMP_DIR);
@@ -52,7 +53,7 @@ const tempStorage = multer.diskStorage({
       cb(error as Error, TEMP_DIR);
     }
   },
-  filename: (req, file, cb) => {
+  filename: (_req, file, cb) => {
     // Generate unique filename with timestamp
     const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1E9)}`;
     const ext = path.extname(file.originalname);
@@ -72,7 +73,7 @@ const csvUpload = multer({
 });
 
 // Middleware for single CSV file upload
-export const uploadCsv = csvUpload.single('csvFile');
+export const uploadCsv: RequestHandler = csvUpload.single('csvFile');
 
 // Cleanup function for temp files
 export async function cleanupTempFile(filePath: string): Promise<void> {

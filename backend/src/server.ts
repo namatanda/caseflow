@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { type Express } from 'express';
 import compression from 'compression';
 import morgan from 'morgan';
 import swaggerJsdoc from 'swagger-jsdoc';
@@ -25,7 +25,7 @@ import { initializeMetrics } from '@/config/metrics';
 // Initialize Prometheus metrics collection
 initializeMetrics();
 
-const app = express();
+const app: Express = express();
 
 // Trust proxy for rate limiting and IP detection
 app.set('trust proxy', 1);

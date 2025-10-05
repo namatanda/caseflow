@@ -1,10 +1,10 @@
-import { Router } from 'express';
+import { Router, type Router as RouterType } from 'express';
 import { authenticateToken } from '@/middleware/auth';
 import { systemRoutes } from './system';
 import { importRoutes } from './import';
 import authRoutes from './auth';
 
-const router = Router();
+const router: RouterType = Router();
 
 // Public routes (no authentication required)
 router.use('/system', systemRoutes); // Health checks, metrics, version info
