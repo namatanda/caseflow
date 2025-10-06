@@ -7,45 +7,39 @@ RUN corepack enable
 
 WORKDIR /app
 
-# Install all dependencies (dev + prod)
+# Install production dependencies only
 FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+    pnpm install --frozen-lockfile --prod
 
+# Build stage with dev dependencies
 FROM base AS builder
-COPY --from=deps /app/node_modules ./node_modules
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+    pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm prisma generate
 RUN pnpm build
-# Prune dev dependencies while keeping generated Prisma client
-RUN pnpm prune --prod
 
-# Final runtime image
+# Final runtime image - using alpine for shell access (needed for migrations)
 FROM node:alpine AS runner
-
-ENV PNPM_HOME="/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable
 
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3001
 
-# Copy production dependencies and build artifacts
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/scripts ./scripts
+# Copy only necessary files
+COPY --from=deps --chown=node:node /app/node_modules ./node_modules
+COPY --from=builder --chown=node:node /app/dist ./dist
+COPY --from=builder --chown=node:node /app/package.json ./package.json
+COPY --from=builder --chown=node:node /app/prisma ./prisma
 
-# Ensure logs directory exists with proper ownership
+# Create logs directory
 RUN mkdir -p logs && chown -R node:node /app
 
 USER node
 
 EXPOSE 3001
-
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3001/api/v1/system/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"
 
 CMD ["node", "dist/server.js"]

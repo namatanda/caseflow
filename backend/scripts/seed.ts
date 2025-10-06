@@ -1,6 +1,7 @@
 #!/usr/bin/env tsx
 
 import { PrismaClient, CourtType, UserRole, CaseStatus } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 import { logger } from '../src/utils/logger';
 import { connectWithRetry } from '../src/config/database';
 
@@ -280,20 +281,27 @@ class DatabaseSeeder {
     try {
       logger.info('Seeding users...');
 
+      // Default password for all users (should be changed on first login)
+      const defaultPassword = 'CourtFlow2024!';
+      const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+
       const users = [
         {
           email: 'admin@courtflow.ke',
           name: 'System Administrator',
+          password: hashedPassword,
           role: UserRole.ADMIN,
         },
         {
           email: 'data.entry@courtflow.ke',
           name: 'Data Entry Clerk',
+          password: hashedPassword,
           role: UserRole.DATA_ENTRY,
         },
         {
           email: 'viewer@courtflow.ke',
           name: 'Report Viewer',
+          password: hashedPassword,
           role: UserRole.VIEWER,
         },
       ];
@@ -304,11 +312,13 @@ class DatabaseSeeder {
           {
             email: 'dev.admin@courtflow.ke',
             name: 'Development Admin',
+            password: hashedPassword,
             role: UserRole.ADMIN,
           },
           {
             email: 'test.user@courtflow.ke',
             name: 'Test User',
+            password: hashedPassword,
             role: UserRole.DATA_ENTRY,
           }
         );
@@ -320,6 +330,8 @@ class DatabaseSeeder {
       });
 
       logger.info(`Seeded ${users.length} users`);
+      logger.info('Default password for all users: CourtFlow2024!');
+      logger.info('Users should change their password on first login');
     } catch (error) {
       logger.error('Failed to seed users:', error);
       throw error;
@@ -357,10 +369,10 @@ class DatabaseSeeder {
           originalCourtId: court.id,
           caseTypeId: caseType.id,
           filedDate,
-          parties: {
+          parties: JSON.stringify({
             applicants: [`Applicant ${i}`],
             defendants: [`Defendant ${i}`],
-          },
+          }),
           status: Math.random() > 0.3 ? CaseStatus.ACTIVE : CaseStatus.RESOLVED,
           maleApplicant: Math.floor(Math.random() * 3),
           femaleApplicant: Math.floor(Math.random() * 3),

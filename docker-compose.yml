@@ -1,6 +1,5 @@
 # CourtFlow - Full Stack Application
 # Root docker-compose file to run backend + frontend + services
-version: '3.8'
 
 services:
   # PostgreSQL Database
@@ -18,8 +17,6 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backend/scripts/init-db.sql:/docker-entrypoint-initdb.d/01-init-db.sql:ro
-      - ./backend/scripts/setup-pg-auth.sh:/docker-entrypoint-initdb.d/02-setup-auth.sh:ro
-      - ./backend/config/pg_hba.conf:/usr/share/postgresql/18/pg_hba.conf.sample:ro
     networks:
       - courtflow-network
     restart: unless-stopped
@@ -84,6 +81,7 @@ services:
     networks:
       - courtflow-network
     restart: unless-stopped
+    command: sh -c "npx prisma migrate deploy && node dist/server.js"
 
   # Frontend Web Application
   frontend:
