@@ -25,12 +25,16 @@ RUN pnpm build
 # Final runtime image - using alpine for shell access (needed for migrations)
 FROM node:alpine AS runner
 
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable
+
 WORKDIR /app
-ENV NODE_ENV=production
+ENV NODE_ENV=development
 ENV PORT=3001
 
-# Copy only necessary files
-COPY --from=deps --chown=node:node /app/node_modules ./node_modules
+# Copy node_modules from builder (includes Prisma CLI) instead of deps (prod only)
+COPY --from=builder --chown=node:node /app/node_modules ./node_modules
 COPY --from=builder --chown=node:node /app/dist ./dist
 COPY --from=builder --chown=node:node /app/package.json ./package.json
 COPY --from=builder --chown=node:node /app/prisma ./prisma

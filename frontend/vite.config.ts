@@ -56,4 +56,13 @@ export default defineConfig({
       'socket.io-client',
     ],
   },
+  // Server configuration
+  server: {
+    host: true, // Listen on all addresses
+    port: 3000,
+    strictPort: true,
+    watch: {
+      usePolling: true, // Required for Docker
+    },
+  },
 })

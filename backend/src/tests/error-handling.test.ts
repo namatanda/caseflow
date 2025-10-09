@@ -64,7 +64,7 @@ describe('Error Handling Tests', () => {
       vi.mocked(importService.createBatch).mockRejectedValue(error);
 
       const req = {
-        file: { originalname: 'test.csv', path: '/temp/test.csv', size: 1024 },
+        file: { originalname: 'test.csv', path: 'temp/test.csv', size: 1024 },
         body: {},
       };
       const res = {
@@ -164,7 +164,7 @@ describe('Error Handling Tests', () => {
         id: 'job-1',
         data: {
           batchId: 'batch-1',
-          filePath: '/temp/test.csv',
+          filePath: 'temp/test.csv',
         },
         updateProgress: vi.fn(),
       };
@@ -176,7 +176,7 @@ describe('Error Handling Tests', () => {
         jobId: 'job-1',
         timestamp: expect.any(String),
       });
-      expect(cleanupTempFile).toHaveBeenCalledWith('/temp/test.csv');
+      expect(cleanupTempFile).toHaveBeenCalledWith('temp/test.csv');
     });
 
     it('should handle CSV processing errors', async () => {
@@ -190,7 +190,7 @@ describe('Error Handling Tests', () => {
         id: 'job-1',
         data: {
           batchId: 'batch-1',
-          filePath: '/temp/test.csv',
+          filePath: 'temp/test.csv',
         },
         updateProgress: vi.fn(),
       };
@@ -202,7 +202,7 @@ describe('Error Handling Tests', () => {
         jobId: 'job-1',
         timestamp: expect.any(String),
       });
-      expect(cleanupTempFile).toHaveBeenCalledWith('/temp/test.csv');
+      expect(cleanupTempFile).toHaveBeenCalledWith('temp/test.csv');
     });
 
     it('should handle non-Error objects thrown during processing', async () => {
@@ -216,7 +216,7 @@ describe('Error Handling Tests', () => {
         id: 'job-1',
         data: {
           batchId: 'batch-1',
-          filePath: '/temp/test.csv',
+          filePath: 'temp/test.csv',
         },
         updateProgress: vi.fn(),
       };
@@ -243,7 +243,7 @@ describe('Error Handling Tests', () => {
         id: 'job-1',
         data: {
           batchId: 'batch-1',
-          filePath: '/temp/test.csv',
+          filePath: 'temp/test.csv',
         },
         updateProgress: vi.fn(),
       };
@@ -251,7 +251,7 @@ describe('Error Handling Tests', () => {
       await expect(processorFunction(job)).rejects.toThrow('Processing failed');
 
       // Cleanup should still be attempted even if it fails
-      expect(cleanupTempFile).toHaveBeenCalledWith('/temp/test.csv');
+      expect(cleanupTempFile).toHaveBeenCalledWith('temp/test.csv');
       expect(importService.failBatch).toHaveBeenCalled();
     });
 
@@ -282,7 +282,7 @@ describe('Error Handling Tests', () => {
       vi.mocked(importService.queueCsvImportWithFile).mockRejectedValue(queueError);
 
       const req = {
-        file: { originalname: 'test.csv', path: '/temp/test.csv', size: 1024 },
+        file: { originalname: 'test.csv', path: 'temp/test.csv', size: 1024 },
         body: {},
       };
       const res = {
@@ -361,7 +361,7 @@ describe('Error Handling Tests', () => {
   describe('JSON Parsing Error Handling', () => {
     it('should handle invalid JSON in metadata', async () => {
       const req = {
-        file: { originalname: 'test.csv', path: '/temp/test.csv', size: 1024 },
+        file: { originalname: 'test.csv', path: 'temp/test.csv', size: 1024 },
         body: {
           metadata: 'invalid json {{{',
         },
@@ -389,7 +389,7 @@ describe('Error Handling Tests', () => {
 
     it('should handle invalid JSON in options', async () => {
       const req = {
-        file: { originalname: 'test.csv', path: '/temp/test.csv', size: 1024 },
+        file: { originalname: 'test.csv', path: 'temp/test.csv', size: 1024 },
         body: {
           options: 'invalid json [[[',
         },
@@ -408,7 +408,7 @@ describe('Error Handling Tests', () => {
 
       // Should succeed with empty options despite invalid JSON
       expect(res.status).toHaveBeenCalledWith(202);
-      expect(importService.queueCsvImportWithFile).toHaveBeenCalledWith('batch-1', '/temp/test.csv', {});
+      expect(importService.queueCsvImportWithFile).toHaveBeenCalledWith('batch-1', 'temp/test.csv', {});
     });
   });
 
@@ -427,7 +427,7 @@ describe('Error Handling Tests', () => {
         id: 'job-1',
         data: {
           batchId: 'batch-1',
-          filePath: '/temp/test.csv',
+          filePath: 'temp/test.csv',
         },
         updateProgress: vi.fn(),
       };
@@ -435,7 +435,7 @@ describe('Error Handling Tests', () => {
       await expect(processorFunction(job)).rejects.toThrow('Processing failed');
 
       // Cleanup should be attempted even if it fails
-      expect(cleanupTempFile).toHaveBeenCalledWith('/temp/test.csv');
+      expect(cleanupTempFile).toHaveBeenCalledWith('temp/test.csv');
     });
   });
 
@@ -446,7 +446,7 @@ describe('Error Handling Tests', () => {
         id: 'job-1',
         data: {
           batchId: 'batch-1',
-          filePath: '/temp/test.csv',
+          filePath: 'temp/test.csv',
         },
         updateProgress: vi.fn().mockRejectedValue(progressError),
       };

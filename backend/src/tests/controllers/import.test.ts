@@ -31,7 +31,7 @@ describe('ImportController', () => {
     mockReq = {
       file: {
         originalname: 'test.csv',
-        path: '/temp/test.csv',
+        path: 'temp/test.csv',
         size: 1024,
       } as Express.Multer.File,
       body: {},

@@ -1,15 +1,21 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+process.env['DATABASE_URL'] = 'postgresql://test:test@localhost:5432/courtflow_test';
 import { calculateFileChecksum } from '../../utils/checksum';
 import { parseCsvFile } from '../../utils/csvParser';
 import { websocketService } from '../../services/websocketService';
 import { validateRequest } from '../../middleware/validation';
 import { z } from 'zod';
-import fs from 'fs/promises';
 import type { Server as HttpServer } from 'http';
 
 // Mock file operations
 vi.mock('fs/promises');
-vi.mock('fs');
+vi.mock('fs', async () => {
+    const actual = await vi.importActual('fs');
+    return {
+        ...actual,
+        createReadStream: vi.fn(),
+    };
+});
 
 // Mock logger
 vi.mock('../utils/logger', () => ({
@@ -22,10 +28,12 @@ vi.mock('../utils/logger', () => ({
 
 describe('Phase 1 Integration Tests', () => {
   let mockHttpServer: Partial<HttpServer>;
+  let fs: any;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     mockHttpServer = {};
     vi.clearAllMocks();
+    fs = await import('fs');
   });
 
   afterEach(() => {
@@ -38,7 +46,8 @@ describe('Phase 1 Integration Tests', () => {
       const mockFilePath = '/test/data.csv';
       
       // Mock successful file stats
-      vi.mocked(fs.stat).mockResolvedValue({
+      const fsPromises = await import('fs/promises');
+      vi.mocked(fsPromises.stat).mockResolvedValue({
         size: 1024,
       } as any);
 
@@ -54,7 +63,6 @@ describe('Phase 1 Integration Tests', () => {
         }),
       }));
       
-      const fs = await import('fs');
       vi.mocked(fs.createReadStream).mockImplementation(mockCreateReadStream as any);
 
       // Calculate checksum
@@ -194,7 +202,6 @@ describe('Phase 1 Integration Tests', () => {
         }),
       };
 
-      const fs = await import('fs');
       vi.mocked(fs.createReadStream).mockReturnValue(mockErrorStream as any);
 
       await expect(
@@ -254,7 +261,8 @@ describe('Phase 1 Integration Tests', () => {
       };
 
       // Mock successful checksum
-      vi.mocked(fs.stat).mockResolvedValue({ size: 2048 } as any);
+      const fsPromises = await import('fs/promises');
+      vi.mocked(fsPromises.stat).mockResolvedValue({ size: 2048 } as any);
       
       const mockStream = {
         on: vi.fn((event, handler) => {
@@ -267,7 +275,6 @@ describe('Phase 1 Integration Tests', () => {
         }),
       };
 
-      const fs = await import('fs');
       vi.mocked(fs.createReadStream).mockReturnValue(mockStream as any);
 
       const fileChecksum = await calculateFileChecksum(uploadedFile.path, 'sha256');
@@ -369,7 +376,8 @@ describe('Phase 1 Integration Tests', () => {
     it('should handle multiple checksum algorithms efficiently', async () => {
       const mockPath = '/test/performance.csv';
       
-      vi.mocked(fs.stat).mockResolvedValue({ size: 10240 } as any);
+      const fsPromises = await import('fs/promises');
+      vi.mocked(fsPromises.stat).mockResolvedValue({ size: 10240 } as any);
 
       const mockStream = {
         on: vi.fn((event, handler) => {
@@ -387,7 +395,6 @@ describe('Phase 1 Integration Tests', () => {
         }),
       };
 
-      const fs = await import('fs');
       vi.mocked(fs.createReadStream).mockReturnValue(mockStream as any);
 
       const startTime = Date.now();

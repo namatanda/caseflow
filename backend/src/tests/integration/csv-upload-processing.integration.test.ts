@@ -1,3 +1,4 @@
+process.env['DATABASE_URL'] = 'postgresql://test:test@localhost:5432/courtflow_test';
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { PrismaClient, ImportStatus } from '@prisma/client';
 import fs from 'fs/promises';
@@ -44,9 +45,9 @@ describe('CSV Upload and Processing Integration Test', () => {
       // Directory might already exist
     }
 
-    prisma = new PrismaClient({
+    prisma = new PrismaClient(/*{
       datasourceUrl: DATABASE_URL,
-    });
+    }*/);
 
     // Create tables manually since we're using in-memory SQLite
     await prisma.$executeRaw`

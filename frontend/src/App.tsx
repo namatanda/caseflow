@@ -1,7 +1,9 @@
+import { Suspense } from 'react';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
+import { CircularProgress, Box } from '@mui/material';
 import { AppRoutes } from './routes';
 import './App.css';
 
@@ -33,7 +35,22 @@ function App() {
       <ThemeProvider theme={theme}>
         <CssBaseline />
         <BrowserRouter>
-          <AppRoutes />
+          <Suspense
+            fallback={
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  height: '100vh',
+                }}
+              >
+                <CircularProgress />
+              </Box>
+            }
+          >
+            <AppRoutes />
+          </Suspense>
         </BrowserRouter>
       </ThemeProvider>
     </QueryClientProvider>

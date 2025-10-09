@@ -17,9 +17,8 @@ const parseJson = <T>(value: string): T | null => {
 // Redis connection configuration
 const redisConfig = {
   retryDelayOnFailover: 100,
-  enableReadyCheck: true,
-  maxRetriesPerRequest: 3,
-  lazyConnect: true,
+  enableReadyCheck: false,
+  maxRetriesPerRequest: null,
   keepAlive: 30000,
   connectTimeout: 10000,
   commandTimeout: 5000,
@@ -30,7 +29,7 @@ const redisConfig = {
   retryDelayOnClusterDown: 300,
   retryDelayOnClusterFailover: 100,
   // Health check interval
-  enableOfflineQueue: false,
+  enableOfflineQueue: true,
 };
 
 // Create Redis client

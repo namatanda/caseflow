@@ -6,13 +6,25 @@ import { uploadCsv, cleanupTempFile, cleanupOldTempFiles, TEMP_DIR, UPLOADS_DIR 
 import { ApiError } from '../../middleware/errorHandler';
 
 // Mock dependencies
-vi.mock('multer');
+vi.mock('multer', () => {
+    const multer = () => ({
+        single: vi.fn(),
+    });
+    multer.diskStorage = vi.fn();
+    return {
+        __esModule: true,
+        default: multer,
+    };
+});
 vi.mock('fs/promises');
 vi.mock('@/config/environment', () => ({
   config: {
     upload: {
       maxFileSize: 10485760, // 10MB
     },
+    logging: {
+        level: 'error',
+    }
   },
 }));
 vi.mock('../../middleware/errorHandler');

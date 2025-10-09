@@ -1,22 +1,33 @@
 import { useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useImportStore } from '@/store/importStore';
+import { useAuthStore } from '@/store/authStore';
 
 export const useWebSocket = () => {
   const socketRef = useRef<Socket | null>(null);
   const updateProgress = useImportStore((state) => state.updateProgress);
   const removeImport = useImportStore((state) => state.removeImport);
+  const accessToken = useAuthStore((state) => state.accessToken);
 
   useEffect(() => {
+    // Only connect if user is authenticated
+    if (!accessToken) {
+      return;
+    }
+
     // Backend runs on port 3001
     const WS_URL = import.meta.env.VITE_WS_URL || 'http://localhost:3001';
 
     socketRef.current = io(WS_URL, {
+      path: '/ws', // Match backend WebSocket path
       transports: ['websocket', 'polling'], // Fallback to polling if websocket fails
       autoConnect: true,
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
+      auth: {
+        token: accessToken,
+      },
     });
 
     // Connection events
@@ -53,9 +64,11 @@ export const useWebSocket = () => {
     });
 
     return () => {
-      socketRef.current?.disconnect();
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+      }
     };
-  }, [updateProgress, removeImport]);
+  }, [updateProgress, removeImport, accessToken]);
 
   const subscribeToImport = (batchId: string) => {
     socketRef.current?.emit('subscribe:batch', batchId);

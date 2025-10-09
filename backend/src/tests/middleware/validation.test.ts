@@ -238,7 +238,7 @@ describe('Validation Middleware', () => {
   });
 
   describe('validateRequest', () => {
-    const schema = {
+    const schema = z.object({
       body: z.object({
         username: z.string().min(3),
       }),
@@ -248,7 +248,7 @@ describe('Validation Middleware', () => {
       params: z.object({
         id: z.string().uuid(),
       }),
-    };
+    });
 
     it('should validate all request parts simultaneously', () => {
       mockReq.body = { username: 'john_doe' };

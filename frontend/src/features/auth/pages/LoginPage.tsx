@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { TextField, Button, Container, Typography, Box } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { authAPI } from '@/api/endpoints/auth';
 
@@ -7,16 +8,27 @@ const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const navigate = useNavigate();
   const { setTokens, setUser } = useAuthStore();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(''); // Clear previous errors
     try {
       const response = await authAPI.login(email, password);
-      setTokens(response.data.accessToken, response.data.refreshToken);
-      setUser(response.data.user);
-    } catch (err) {
-      setError('Invalid credentials');
+      
+      // API returns: { message: "...", data: { accessToken, refreshToken, user } }
+      const { accessToken, refreshToken, user } = response.data.data;
+      
+      setTokens(accessToken, refreshToken);
+      setUser(user);
+      
+      // Navigate to dashboard after successful login
+      navigate('/', { replace: true });
+    } catch (err: any) {
+      const errorMessage = err?.response?.data?.message || err?.message || 'Invalid credentials';
+      setError(errorMessage);
+      console.error('Login error:', err);
     }
   };
 

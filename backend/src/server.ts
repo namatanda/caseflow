@@ -10,11 +10,24 @@ import {
   errorHandler,
   notFoundHandler,
   requestLogger,
-  getCorsMiddleware,
+  devCorsMiddleware,
   generalRateLimit,
   applySecurity,
   metricsMiddleware,
 } from '@/middleware';
+
+// Global error handlers for debugging
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught Exception:', error);
+  console.error('Uncaught Exception:', error);
+  process.exit(1);
+});
+
 import { apiRoutes } from '@/routes';
 // Import worker to initialize it
 import '@/workers/csvImportWorker';
@@ -34,7 +47,8 @@ app.set('trust proxy', 1);
 app.use(applySecurity);
 
 // CORS configuration (environment-aware)
-app.use(getCorsMiddleware());
+// TODO: Revert to getCorsMiddleware() for production
+app.use(devCorsMiddleware);
 
 // Rate limiting (general API rate limiting)
 app.use(generalRateLimit);
