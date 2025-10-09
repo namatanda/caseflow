@@ -343,7 +343,7 @@ const swaggerOptions = {
       },
     ],
   },
-  apis: ['./src/routes/*.ts', './src/controllers/*.ts'], // Paths to files containing OpenAPI definitions
+  apis: ['./src/routes/*.ts', './src/controllers/*.ts'],
 };
 
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
@@ -355,6 +355,27 @@ app.get('/health', (_req: express.Request, res: express.Response) => {
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     environment: config.env
+  });
+});
+
+// Favicon - return 204 No Content to avoid 404 warnings
+app.get('/favicon.ico', (_req: express.Request, res: express.Response) => {
+  res.status(204).end();
+});
+
+// Root route - API information
+app.get('/', (_req: express.Request, res: express.Response) => {
+  res.status(200).json({
+    name: 'CourtFlow Backend API',
+    version: config.api.version,
+    environment: config.env,
+    endpoints: {
+      health: '/health',
+      api: '/api/v1',
+      docs: '/api-docs',
+      metrics: '/api/system/metrics'
+    },
+    timestamp: new Date().toISOString()
   });
 });
 

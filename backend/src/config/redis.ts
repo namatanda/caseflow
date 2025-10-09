@@ -18,10 +18,10 @@ const parseJson = <T>(value: string): T | null => {
 const redisConfig = {
   retryDelayOnFailover: 100,
   enableReadyCheck: false,
-  maxRetriesPerRequest: null,
+  maxRetriesPerRequest: null, // Required for BullMQ
   keepAlive: 30000,
   connectTimeout: 10000,
-  commandTimeout: 5000,
+  commandTimeout: 30000, // Increased from 5000 to prevent timeouts during queue operations
   // Connection pool settings
   family: 4,
   db: 0,
@@ -30,6 +30,11 @@ const redisConfig = {
   retryDelayOnClusterFailover: 100,
   // Health check interval
   enableOfflineQueue: true,
+  lazyConnect: false, // Connect immediately
+  retryStrategy(times: number) {
+    const delay = Math.min(times * 50, 2000);
+    return delay;
+  },
 };
 
 // Create Redis client

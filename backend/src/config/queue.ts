@@ -1,11 +1,20 @@
 import { Queue } from 'bullmq';
-import { redis } from './redis';
+import { config } from './environment';
 import { logger } from '@/utils/logger';
 
 // Queue names
 export const QUEUE_NAMES = {
   CSV_IMPORT: 'csv-import',
 } as const;
+
+// BullMQ connection configuration - must be a plain object, not a Redis instance
+const bullMQConnection = {
+  host: config.redis.url.includes('localhost') ? 'localhost' : config.redis.url.replace('redis://', '').split(':')[0],
+  port: config.redis.url.includes(':') ? parseInt(config.redis.url.split(':').pop() || '6379') : 6379,
+  maxRetriesPerRequest: null, // Required for BullMQ
+  enableReadyCheck: false,
+  enableOfflineQueue: true,
+};
 
 // Queue configurations
 const queueConfigs = {
@@ -15,16 +24,16 @@ const queueConfigs = {
       removeOnFail: 100, // Keep last 100 failed jobs
       attempts: 3,
       backoff: {
-        type: 'exponential',
+        type: 'exponential' as const,
         delay: 2000,
       },
     },
   },
 };
 
-// Create queues
+// Create queues with connection config
 export const csvImportQueue = new Queue(QUEUE_NAMES.CSV_IMPORT, {
-  connection: redis,
+  connection: bullMQConnection,
   ...queueConfigs[QUEUE_NAMES.CSV_IMPORT],
 });
 
