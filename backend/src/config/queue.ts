@@ -8,9 +8,21 @@ export const QUEUE_NAMES = {
 } as const;
 
 // BullMQ connection configuration - must be a plain object, not a Redis instance
+// Parse Redis URL properly: redis://host:port or redis://localhost:6379
+const parseRedisUrl = (url: string) => {
+  const cleanUrl = url.replace('redis://', '');
+  const parts = cleanUrl.split(':');
+  return {
+    host: parts[0] || 'localhost',
+    port: parseInt(parts[1] || '6379'),
+  };
+};
+
+const { host, port } = parseRedisUrl(config.redis.url);
+
 const bullMQConnection = {
-  host: config.redis.url.includes('localhost') ? 'localhost' : config.redis.url.replace('redis://', '').split(':')[0],
-  port: config.redis.url.includes(':') ? parseInt(config.redis.url.split(':').pop() || '6379') : 6379,
+  host,
+  port,
   maxRetriesPerRequest: null, // Required for BullMQ
   enableReadyCheck: false,
   enableOfflineQueue: true,
