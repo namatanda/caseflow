@@ -20,8 +20,6 @@ import {
 } from '@/services/importService';
 import type { CaseSearchParams } from '@/services/caseService';
 
-const DEFAULT_CREATED_BY = 'system';
-
 const CSV_HEADERS = [
   'caseNumber',
   'courtName',
@@ -117,7 +115,11 @@ export class ImportController {
 
       const importDate = parseDate(metadata['importDate']) ?? new Date();
       const fileSize = req.file.size;
-      const createdBy = typeof metadata['createdBy'] === 'string' ? metadata['createdBy'] : DEFAULT_CREATED_BY;
+      const createdBy = req.user?.id ?? (typeof metadata['createdBy'] === 'string' ? metadata['createdBy'] : undefined);
+      if (!createdBy) {
+        res.status(400).json({ message: 'Authenticated user context is required to create import batches.' });
+        return;
+      }
       const estimatedCompletionTime = parseDate(metadata['estimatedCompletionTime']);
 
       // Calculate file checksum

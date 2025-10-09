@@ -189,8 +189,12 @@ export class ImportService extends BaseService<DailyImportBatchRepository> {
               courtName: row.courtName || 'Unknown Court',
               caseTypeId: row.caseTypeId || 'unknown',
               filedDate: row.filedDate ? new Date(row.filedDate) : new Date(),
-              status: (row.status) || 'ACTIVE',
-              totalActivities: parseInt(row.totalActivities) || 0,
+              status: row.status || 'ACTIVE',
+              totalActivities: parseInt(row.totalActivities, 10) || 0,
+              parties:
+                typeof row.parties === 'string' && row.parties.trim().length > 0
+                  ? row.parties
+                  : JSON.stringify({ applicants: [], defendants: [] }),
               createdAt: new Date(),
               updatedAt: new Date(),
             }));

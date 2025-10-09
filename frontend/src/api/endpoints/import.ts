@@ -1,6 +1,5 @@
 import { apiClient } from '../client';
 import type { AxiosResponse } from 'axios';
-import type { BatchInfo } from '@/store/importStore';
 import type {
   UploadResponse,
   BatchStatusResponse,
@@ -14,12 +13,12 @@ export const importAPI = {
     metadata?: Record<string, unknown>
   ): Promise<AxiosResponse<UploadResponse>> => {
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('csvFile', file);
     if (metadata) {
       formData.append('metadata', JSON.stringify(metadata));
     }
 
-    return apiClient.post('/import/upload', formData, {
+    return apiClient.post('/import/csv', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
