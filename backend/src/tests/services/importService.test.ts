@@ -4,6 +4,7 @@ const {
   repositoryMock,
   csvServiceMock,
   batchServiceMock,
+  caseTypeRepositoryMock,
 } = vi.hoisted(() => {
   const repositoryMock = {
     create: vi.fn(),
@@ -22,10 +23,16 @@ const {
     getRecentBatches: vi.fn(),
   };
 
+  const caseTypeRepositoryMock = {
+    findByCode: vi.fn(),
+    create: vi.fn(),
+  };
+
   return {
     repositoryMock,
     csvServiceMock,
     batchServiceMock,
+    caseTypeRepositoryMock,
   };
 });
 
@@ -61,7 +68,8 @@ const createService = () =>
   new ImportService(
     repositoryMock as any,
     csvServiceMock as any,
-    batchServiceMock as any
+    batchServiceMock as any,
+    caseTypeRepositoryMock as any
   );
 
 describe('ImportService', () => {
@@ -299,7 +307,7 @@ describe('ImportService', () => {
       cases: [{ id: 'case-1', caseNumber: 'CASE-001' }],
       activities: [],
       assignments: [],
-    };
+    } as any;
     const options: ProcessCsvBatchOptions = {
       chunkSize: 100,
       errorLogs: ['test error'],

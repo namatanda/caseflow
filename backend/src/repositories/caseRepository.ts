@@ -54,6 +54,7 @@ export class CaseRepository extends BaseRepository<CaseDelegate> {
 
     return this.delegate.createMany({
       data: records,
+      skipDuplicates: true, // avoid aborting the batch when the CSV repeats a case
     });
   }
 

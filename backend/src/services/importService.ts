@@ -1,5 +1,5 @@
 import type { Prisma } from '@prisma/client';
-import { ImportStatus } from '@prisma/client';
+import { CaseStatus, ImportStatus } from '@prisma/client';
 import { csvImportQueue } from '@/config/queue';
 import type { CsvImportJobData } from '@/workers/csvImportWorker';
 
@@ -7,6 +7,10 @@ import {
   dailyImportBatchRepository,
   DailyImportBatchRepository,
 } from '@/repositories/dailyImportBatchRepository';
+import {
+  caseTypeRepository as defaultCaseTypeRepository,
+  CaseTypeRepository,
+} from '@/repositories/caseTypeRepository';
 import type { CaseSearchParams } from './caseService';
 import {
   CaseCsvService,
@@ -54,16 +58,19 @@ export interface ProcessCsvBatchOptions {
 export class ImportService extends BaseService<DailyImportBatchRepository> {
   private readonly csvService: CaseCsvService;
   private readonly batchService: DailyImportBatchService;
+  private readonly caseTypeRepository: CaseTypeRepository;
 
   constructor(
     repository: DailyImportBatchRepository = dailyImportBatchRepository,
     csvService: CaseCsvService = caseCsvService,
     batchService: DailyImportBatchService = dailyImportBatchService,
+    caseTypeRepository: CaseTypeRepository = defaultCaseTypeRepository,
     context: ServiceContext = {}
   ) {
     super(repository, context);
     this.csvService = csvService;
     this.batchService = batchService;
+    this.caseTypeRepository = caseTypeRepository;
   }
 
   createBatch(input: CreateImportBatchInput) {
@@ -158,6 +165,145 @@ export class ImportService extends BaseService<DailyImportBatchRepository> {
     const fs = await import('fs');
     const crypto = await import('crypto');
 
+    const monthIndexByLabel: Record<string, number> = {
+      jan: 0,
+      feb: 1,
+      mar: 2,
+      apr: 3,
+      may: 4,
+      jun: 5,
+      jul: 6,
+      aug: 7,
+      sep: 8,
+      oct: 9,
+      nov: 10,
+      dec: 11,
+    };
+
+    const normalizeString = (value: unknown) =>
+      typeof value === 'string' ? value.trim() : typeof value === 'number' && Number.isFinite(value) ? String(value) : '';
+
+    const parseInteger = (value: unknown) => {
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        return Math.trunc(value);
+      }
+
+      if (typeof value === 'string') {
+        const numericString = value.replace(/[^0-9-]+/g, '').trim();
+        if (numericString.length === 0) {
+          return 0;
+        }
+        const parsed = Number.parseInt(numericString, 10);
+        return Number.isFinite(parsed) ? parsed : 0;
+      }
+
+      return 0;
+    };
+
+    const parseBoolean = (value: unknown) => {
+      if (typeof value === 'boolean') {
+        return value;
+      }
+
+      if (typeof value === 'number') {
+        return value > 0;
+      }
+
+      if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase();
+        if (['yes', 'y', 'true', '1'].includes(normalized)) {
+          return true;
+        }
+        if (['no', 'n', 'false', '0'].includes(normalized)) {
+          return false;
+        }
+      }
+
+      return false;
+    };
+
+    const parseDateParts = (day: unknown, month: unknown, year: unknown): Date | undefined => {
+      const dayNumber = typeof day === 'number' ? day : Number.parseInt(normalizeString(day), 10);
+      const monthLabel = normalizeString(month).toLowerCase();
+      const monthIndex = monthIndexByLabel[monthLabel.slice(0, 3)];
+      const yearNumber = typeof year === 'number' ? year : Number.parseInt(normalizeString(year), 10);
+
+      if (
+        Number.isFinite(dayNumber) &&
+        typeof monthIndex === 'number' &&
+        Number.isFinite(yearNumber)
+      ) {
+        return new Date(Date.UTC(yearNumber, monthIndex, dayNumber));
+      }
+
+      const fallbackString = normalizeString(year);
+      if (fallbackString) {
+        const fallbackDate = new Date(fallbackString);
+        if (!Number.isNaN(fallbackDate.getTime())) {
+          return fallbackDate;
+        }
+      }
+
+      return undefined;
+    };
+
+    const deriveStatus = (outcomeRaw: unknown): CaseStatus => {
+      const outcome = normalizeString(outcomeRaw).toLowerCase();
+      if (
+        outcome.includes('terminated') ||
+        outcome.includes('dismissed') ||
+        outcome.includes('closed') ||
+        outcome.includes('resolved')
+      ) {
+        return 'RESOLVED';
+      }
+      return 'ACTIVE';
+    };
+
+    const buildPartiesPayload = (row: Record<string, unknown>) => {
+      const maleApplicant = parseInteger(row.male_applicant);
+      const femaleApplicant = parseInteger(row.female_applicant);
+      const organizationApplicant = parseInteger(row.organization_applicant);
+      const maleDefendant = parseInteger(row.male_defendant);
+      const femaleDefendant = parseInteger(row.female_defendant);
+      const organizationDefendant = parseInteger(row.organization_defendant);
+
+      return JSON.stringify({
+        summary: {
+          maleApplicant,
+          femaleApplicant,
+          organizationApplicant,
+          maleDefendant,
+          femaleDefendant,
+          organizationDefendant,
+        },
+      });
+    };
+
+    const deriveCaseNumber = (row: Record<string, unknown>, index: number) => {
+      const type = normalizeString(row.caseid_type);
+      const number = normalizeString(row.caseid_no);
+      const filedYear = normalizeString(row.filed_yyyy) || normalizeString(row.date_yyyy) || normalizeString(row.original_year);
+
+      const segments = [type, number, filedYear].filter((segment) => segment.length > 0);
+
+      if (segments.length === 0) {
+        return `unknown-${index}`;
+      }
+
+      return segments.join('/');
+    };
+
+    const collectCaseTypeCode = (row: Record<string, unknown>) => {
+      const code = normalizeString(row.caseid_type) || normalizeString(row.case_type) || normalizeString(row.caseTypeId);
+      return code.length > 0 ? code : '';
+    };
+
+    const collectCaseTypeName = (row: Record<string, unknown>) => {
+      const name = normalizeString(row.case_type) || normalizeString(row.caseType) || normalizeString(row.caseTypeName);
+      return name.length > 0 ? name : '';
+    };
+
     return new Promise((resolve, reject) => {
       const results: any[] = [];
       let totalRecords = 0;
@@ -183,22 +329,102 @@ export class ImportService extends BaseService<DailyImportBatchRepository> {
               },
             });
 
-            // Convert CSV data to the expected format
-            const cases: any[] = results.map((row, index) => ({
-              caseNumber: row.caseNumber || `unknown-${index}`,
-              courtName: row.courtName || 'Unknown Court',
-              caseTypeId: row.caseTypeId || 'unknown',
-              filedDate: row.filedDate ? new Date(row.filedDate) : new Date(),
-              status: row.status || 'ACTIVE',
-              totalActivities: parseInt(row.totalActivities, 10) || 0,
-              parties:
-                typeof row.parties === 'string' && row.parties.trim().length > 0
-                  ? row.parties
-                  : JSON.stringify({ applicants: [], defendants: [] }),
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            }));
+            const uniqueCaseTypes = new Map<string, string>();
+            for (const row of results) {
+              const code = collectCaseTypeCode(row);
+              if (!code) {
+                continue;
+              }
+              if (!uniqueCaseTypes.has(code)) {
+                const name = collectCaseTypeName(row) || code;
+                uniqueCaseTypes.set(code, name);
+              }
+            }
 
+            const caseTypeIdByCode = new Map<string, string>();
+            for (const [code, name] of uniqueCaseTypes.entries()) {
+              const existing = await this.caseTypeRepository.findByCode(code);
+              if (existing) {
+                caseTypeIdByCode.set(code, existing.id);
+                continue;
+              }
+
+              const created = await this.caseTypeRepository.create({
+                data: {
+                  caseTypeCode: code,
+                  caseTypeName: name || code,
+                },
+              } satisfies Prisma.CaseTypeCreateArgs);
+
+              caseTypeIdByCode.set(code, created.id);
+            }
+
+            let unknownCaseTypeId: string | null = null;
+            const resolveUnknownCaseTypeId = async () => {
+              if (unknownCaseTypeId) {
+                return unknownCaseTypeId;
+              }
+
+              const existing = await this.caseTypeRepository.findByCode('UNKNOWN');
+              if (existing) {
+                unknownCaseTypeId = existing.id;
+                return existing.id;
+              }
+
+              const created = await this.caseTypeRepository.create({
+                data: {
+                  caseTypeCode: 'UNKNOWN',
+                  caseTypeName: 'Unknown Case Type',
+                  description: 'Auto-generated placeholder for unmapped case types',
+                },
+              } satisfies Prisma.CaseTypeCreateArgs);
+
+              unknownCaseTypeId = created.id;
+              return created.id;
+            };
+
+            const cases: Prisma.CaseCreateManyInput[] = [];
+
+            for (const [index, row] of results.entries()) {
+              const caseTypeCode = collectCaseTypeCode(row);
+              const caseTypeId = caseTypeCode ? caseTypeIdByCode.get(caseTypeCode) : undefined;
+              const resolvedCaseTypeId = caseTypeId ?? (await resolveUnknownCaseTypeId());
+
+              const filedDate =
+                parseDateParts(row.filed_dd, row.filed_mon, row.filed_yyyy) ??
+                (row.filedDate ? new Date(row.filedDate) : undefined) ??
+                new Date();
+
+              const activityDate = parseDateParts(row.date_dd, row.date_mon, row.date_yyyy);
+              const nextHearingDate = parseDateParts(row.next_dd, row.next_mon, row.next_yyyy);
+
+              cases.push({
+                caseNumber: deriveCaseNumber(row, index),
+                courtName: normalizeString(row.court) || 'Unknown Court',
+                caseTypeId: resolvedCaseTypeId,
+                filedDate,
+                status: deriveStatus(row.outcome),
+                totalActivities:
+                  parseInteger((row as Record<string, unknown>).total_activities) ||
+                  parseInteger((row as Record<string, unknown>).totalActivities) ||
+                  (normalizeString(row.comingfor) ? 1 : 0),
+                parties: buildPartiesPayload(row),
+                hasLegalRepresentation: parseBoolean(row.legalrep),
+                maleApplicant: parseInteger(row.male_applicant),
+                femaleApplicant: parseInteger(row.female_applicant),
+                organizationApplicant: parseInteger(row.organization_applicant),
+                maleDefendant: parseInteger(row.male_defendant),
+                femaleDefendant: parseInteger(row.female_defendant),
+                organizationDefendant: parseInteger(row.organization_defendant),
+                lastActivityDate: nextHearingDate ?? activityDate ?? null,
+                caseidType: normalizeString(row.caseid_type) || null,
+                caseidNo: normalizeString(row.caseid_no) || null,
+                originalCaseNumber: normalizeString(row.original_number) || null,
+                originalYear: parseInteger(row.original_year) || null,
+              } satisfies Prisma.CaseCreateManyInput);
+            }
+
+            // Convert CSV data to the expected format
             // Process the parsed data
             const result = await this.processCsvBatch(
               batchId,
