@@ -5,6 +5,7 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "dev:local": "NODE_ENV=development tsx watch --env-file=.env.local src/server.ts",
     "build": "tsc && tsc-alias",
     "start": "node dist/server.js",
     "test": "vitest run",
@@ -23,6 +24,7 @@
     "db:seed:dev": "tsx scripts/seed.ts development",
     "db:seed:staging": "tsx scripts/seed.ts staging --force",
     "db:seed:prod": "tsx scripts/seed.ts production",
+    "db:setup": "pnpm db:generate && pnpm db:migrate && pnpm db:seed:dev",
     "migrate:dev": "tsx scripts/migrate.ts development",
     "migrate:staging": "tsx scripts/migrate.ts staging",
     "migrate:prod": "tsx scripts/migrate.ts production",

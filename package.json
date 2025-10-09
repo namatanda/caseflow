@@ -1,0 +1,10 @@
+{
+  "name": "caseflow",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"cd backend && pnpm dev\" \"cd frontend && npm run dev\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
