@@ -426,195 +426,195 @@ export class ImportService extends BaseService<DailyImportBatchRepository> {
         })
         .on('end', () => {
           void (async () => {
-          try {
-            // Calculate file checksum
-            const fileBuffer = fs.readFileSync(filePath);
-            const checksum = crypto.createHash('md5').update(fileBuffer).digest('hex');
+            try {
+              // Calculate file checksum
+              const fileBuffer = fs.readFileSync(filePath);
+              const checksum = crypto.createHash('md5').update(fileBuffer).digest('hex');
 
-            // Update batch with actual record count and checksum
-            await this.repository.update({
-              where: { id: batchId },
-              data: {
-                totalRecords,
-                fileChecksum: checksum,
-              },
-            });
-
-            const uniqueCaseTypes = new Map<string, string>();
-            const uniqueCourts = new Map<string, { displayName: string; caseIdType?: string }>();
-
-            const registerCourtName = (rawName: string, caseIdType?: string) => {
-              const displayName = rawName.length > 0 ? rawName : 'Unknown Court';
-              const key = toCourtKey(displayName);
-              const existing = uniqueCourts.get(key);
-              const candidateType = caseIdType && caseIdType.length > 0 ? caseIdType : undefined;
-
-              if (existing) {
-                if (!existing.caseIdType && candidateType) {
-                  existing.caseIdType = candidateType;
-                }
-                return;
-              }
-
-              uniqueCourts.set(key, {
-                displayName,
-                caseIdType: candidateType,
+              // Update batch with actual record count and checksum
+              await this.repository.update({
+                where: { id: batchId },
+                data: {
+                  totalRecords,
+                  fileChecksum: checksum,
+                },
               });
-            };
 
-            for (const row of results) {
-              const code = collectCaseTypeCode(row);
-              if (!code) {
-                continue;
-              }
-              if (!uniqueCaseTypes.has(code)) {
-                const name = collectCaseTypeName(row) || code;
-                uniqueCaseTypes.set(code, name);
+              const uniqueCaseTypes = new Map<string, string>();
+              const uniqueCourts = new Map<string, { displayName: string; caseIdType?: string }>();
+
+              const registerCourtName = (rawName: string, caseIdType?: string) => {
+                const displayName = rawName.length > 0 ? rawName : 'Unknown Court';
+                const key = toCourtKey(displayName);
+                const existing = uniqueCourts.get(key);
+                const candidateType = caseIdType && caseIdType.length > 0 ? caseIdType : undefined;
+
+                if (existing) {
+                  if (!existing.caseIdType && candidateType) {
+                    existing.caseIdType = candidateType;
+                  }
+                  return;
+                }
+
+                uniqueCourts.set(key, {
+                  displayName,
+                  caseIdType: candidateType,
+                });
+              };
+
+              for (const row of results) {
+                const code = collectCaseTypeCode(row);
+                if (!code) {
+                  continue;
+                }
+                if (!uniqueCaseTypes.has(code)) {
+                  const name = collectCaseTypeName(row) || code;
+                  uniqueCaseTypes.set(code, name);
+                }
+
+                const courtName = normalizeString(row['court']);
+                const caseIdType = normalizeString(row['caseid_type']);
+                registerCourtName(courtName, caseIdType);
+
+                const originalCourtName = normalizeString(row['original_court']);
+                const originalCaseType = normalizeString(row['original_code']) || caseIdType;
+                if (originalCourtName.length > 0) {
+                  registerCourtName(originalCourtName, originalCaseType);
+                }
               }
 
-              const courtName = normalizeString(row['court']);
-              const caseIdType = normalizeString(row['caseid_type']);
-              registerCourtName(courtName, caseIdType);
+              const caseTypeIdByCode = new Map<string, string>();
+              for (const [code, name] of uniqueCaseTypes.entries()) {
+                const existing = await this.caseTypeRepository.findByCode(code);
+                if (existing) {
+                  caseTypeIdByCode.set(code, existing.id);
+                  continue;
+                }
 
-              const originalCourtName = normalizeString(row['original_court']);
-              const originalCaseType = normalizeString(row['original_code']) || caseIdType;
-              if (originalCourtName.length > 0) {
-                registerCourtName(originalCourtName, originalCaseType);
+                const created = await this.caseTypeRepository.create({
+                  data: {
+                    caseTypeCode: code,
+                    caseTypeName: name || code,
+                  },
+                } satisfies Prisma.CaseTypeCreateArgs);
+
+                caseTypeIdByCode.set(code, created.id);
               }
+
+              const courtIdByKey = new Map<string, string>();
+              for (const [key, descriptor] of uniqueCourts.entries()) {
+                const { displayName, caseIdType } = descriptor;
+
+                if (displayName === 'Unknown Court') {
+                  const unknownId = await resolveUnknownCourtId();
+                  courtIdByKey.set(key, unknownId);
+                  continue;
+                }
+
+                const existing = await this.courtRepository.findByName(displayName, { includeInactive: true });
+                if (existing) {
+                  courtIdByKey.set(key, existing.id);
+                  continue;
+                }
+
+                const courtType = inferCourtType(caseIdType);
+                const courtCode = await generateCourtCode(displayName, courtType);
+
+                const createdCourt = await this.courtRepository.create({
+                  data: {
+                    courtName: displayName,
+                    courtCode,
+                    courtType,
+                  },
+                } satisfies Prisma.CourtCreateArgs);
+
+                courtIdByKey.set(key, createdCourt.id);
+              }
+
+              let unknownCaseTypeId: string | null = null;
+              const resolveUnknownCaseTypeId = async () => {
+                if (unknownCaseTypeId) {
+                  return unknownCaseTypeId;
+                }
+
+                const existing = await this.caseTypeRepository.findByCode('UNKNOWN');
+                if (existing) {
+                  unknownCaseTypeId = existing.id;
+                  return existing.id;
+                }
+
+                const created = await this.caseTypeRepository.create({
+                  data: {
+                    caseTypeCode: 'UNKNOWN',
+                    caseTypeName: 'Unknown Case Type',
+                    description: 'Auto-generated placeholder for unmapped case types',
+                  },
+                } satisfies Prisma.CaseTypeCreateArgs);
+
+                unknownCaseTypeId = created.id;
+                return created.id;
+              };
+
+              const cases: Prisma.CaseCreateManyInput[] = [];
+
+              for (const [index, row] of results.entries()) {
+                const caseTypeCode = collectCaseTypeCode(row);
+                const caseTypeId = caseTypeCode ? caseTypeIdByCode.get(caseTypeCode) : undefined;
+                const resolvedCaseTypeId = caseTypeId ?? (await resolveUnknownCaseTypeId());
+
+                const filedDate =
+                  parseDateParts(row['filed_dd'], row['filed_mon'], row['filed_yyyy']) ??
+                  parseDateValue(row['filedDate']) ??
+                  new Date();
+
+                const activityDate = parseDateParts(row['date_dd'], row['date_mon'], row['date_yyyy']);
+                const nextHearingDate = parseDateParts(row['next_dd'], row['next_mon'], row['next_yyyy']);
+
+                const courtName = normalizeString(row['court']) || 'Unknown Court';
+                const courtKey = toCourtKey(courtName);
+                const resolvedCourtId = courtIdByKey.get(courtKey) ?? (await resolveUnknownCourtId());
+
+                const originalCourtName = normalizeString(row['original_court']);
+                const originalCourtId = originalCourtName.length > 0 ? courtIdByKey.get(toCourtKey(originalCourtName)) ?? null : null;
+
+                cases.push({
+                  caseNumber: deriveCaseNumber(row, index),
+                  courtId: resolvedCourtId,
+                  originalCourtId,
+                  caseTypeId: resolvedCaseTypeId,
+                  filedDate,
+                  status: deriveStatus(row['outcome']),
+                  totalActivities:
+                    parseInteger(row['total_activities']) ||
+                    parseInteger(row['totalActivities']) ||
+                    (normalizeString(row['comingfor']) ? 1 : 0),
+                  parties: buildPartiesPayload(row),
+                  hasLegalRepresentation: parseBoolean(row['legalrep']),
+                  maleApplicant: parseInteger(row['male_applicant']),
+                  femaleApplicant: parseInteger(row['female_applicant']),
+                  organizationApplicant: parseInteger(row['organization_applicant']),
+                  maleDefendant: parseInteger(row['male_defendant']),
+                  femaleDefendant: parseInteger(row['female_defendant']),
+                  organizationDefendant: parseInteger(row['organization_defendant']),
+                  lastActivityDate: nextHearingDate ?? activityDate ?? null,
+                  caseidNo: normalizeString(row['caseid_no']) || null,
+                  originalCaseNumber: normalizeString(row['original_number']) || null,
+                  originalYear: parseInteger(row['original_year']) || null,
+                } satisfies Prisma.CaseCreateManyInput);
+              }
+
+              // Convert CSV data to the expected format
+              // Process the parsed data
+              const result = await this.processCsvBatch(
+                batchId,
+                { cases },
+                { ...options, totals: { totalRecords, failedRecords: 0 } }
+              );
+
+              resolve(result);
+            } catch (error) {
+              reject(error);
             }
-
-            const caseTypeIdByCode = new Map<string, string>();
-            for (const [code, name] of uniqueCaseTypes.entries()) {
-              const existing = await this.caseTypeRepository.findByCode(code);
-              if (existing) {
-                caseTypeIdByCode.set(code, existing.id);
-                continue;
-              }
-
-              const created = await this.caseTypeRepository.create({
-                data: {
-                  caseTypeCode: code,
-                  caseTypeName: name || code,
-                },
-              } satisfies Prisma.CaseTypeCreateArgs);
-
-              caseTypeIdByCode.set(code, created.id);
-            }
-
-            const courtIdByKey = new Map<string, string>();
-            for (const [key, descriptor] of uniqueCourts.entries()) {
-              const { displayName, caseIdType } = descriptor;
-
-              if (displayName === 'Unknown Court') {
-                const unknownId = await resolveUnknownCourtId();
-                courtIdByKey.set(key, unknownId);
-                continue;
-              }
-
-              const existing = await this.courtRepository.findByName(displayName, { includeInactive: true });
-              if (existing) {
-                courtIdByKey.set(key, existing.id);
-                continue;
-              }
-
-              const courtType = inferCourtType(caseIdType);
-              const courtCode = await generateCourtCode(displayName, courtType);
-
-              const createdCourt = await this.courtRepository.create({
-                data: {
-                  courtName: displayName,
-                  courtCode,
-                  courtType,
-                },
-              } satisfies Prisma.CourtCreateArgs);
-
-              courtIdByKey.set(key, createdCourt.id);
-            }
-
-            let unknownCaseTypeId: string | null = null;
-            const resolveUnknownCaseTypeId = async () => {
-              if (unknownCaseTypeId) {
-                return unknownCaseTypeId;
-              }
-
-              const existing = await this.caseTypeRepository.findByCode('UNKNOWN');
-              if (existing) {
-                unknownCaseTypeId = existing.id;
-                return existing.id;
-              }
-
-              const created = await this.caseTypeRepository.create({
-                data: {
-                  caseTypeCode: 'UNKNOWN',
-                  caseTypeName: 'Unknown Case Type',
-                  description: 'Auto-generated placeholder for unmapped case types',
-                },
-              } satisfies Prisma.CaseTypeCreateArgs);
-
-              unknownCaseTypeId = created.id;
-              return created.id;
-            };
-
-            const cases: Prisma.CaseCreateManyInput[] = [];
-
-            for (const [index, row] of results.entries()) {
-              const caseTypeCode = collectCaseTypeCode(row);
-              const caseTypeId = caseTypeCode ? caseTypeIdByCode.get(caseTypeCode) : undefined;
-              const resolvedCaseTypeId = caseTypeId ?? (await resolveUnknownCaseTypeId());
-
-              const filedDate =
-                parseDateParts(row['filed_dd'], row['filed_mon'], row['filed_yyyy']) ??
-                parseDateValue(row['filedDate']) ??
-                new Date();
-
-              const activityDate = parseDateParts(row['date_dd'], row['date_mon'], row['date_yyyy']);
-              const nextHearingDate = parseDateParts(row['next_dd'], row['next_mon'], row['next_yyyy']);
-
-              const courtName = normalizeString(row['court']) || 'Unknown Court';
-              const courtKey = toCourtKey(courtName);
-              const resolvedCourtId = courtIdByKey.get(courtKey) ?? (await resolveUnknownCourtId());
-
-              const originalCourtName = normalizeString(row['original_court']);
-              const originalCourtId = originalCourtName.length > 0 ? courtIdByKey.get(toCourtKey(originalCourtName)) ?? null : null;
-
-              cases.push({
-                caseNumber: deriveCaseNumber(row, index),
-                courtId: resolvedCourtId,
-                originalCourtId,
-                caseTypeId: resolvedCaseTypeId,
-                filedDate,
-                status: deriveStatus(row['outcome']),
-                totalActivities:
-                  parseInteger(row['total_activities']) ||
-                  parseInteger(row['totalActivities']) ||
-                  (normalizeString(row['comingfor']) ? 1 : 0),
-                parties: buildPartiesPayload(row),
-                hasLegalRepresentation: parseBoolean(row['legalrep']),
-                maleApplicant: parseInteger(row['male_applicant']),
-                femaleApplicant: parseInteger(row['female_applicant']),
-                organizationApplicant: parseInteger(row['organization_applicant']),
-                maleDefendant: parseInteger(row['male_defendant']),
-                femaleDefendant: parseInteger(row['female_defendant']),
-                organizationDefendant: parseInteger(row['organization_defendant']),
-                lastActivityDate: nextHearingDate ?? activityDate ?? null,
-                caseidNo: normalizeString(row['caseid_no']) || null,
-                originalCaseNumber: normalizeString(row['original_number']) || null,
-                originalYear: parseInteger(row['original_year']) || null,
-              } satisfies Prisma.CaseCreateManyInput);
-            }
-
-            // Convert CSV data to the expected format
-            // Process the parsed data
-            const result = await this.processCsvBatch(
-              batchId,
-              { cases },
-              { ...options, totals: { totalRecords, failedRecords: 0 } }
-            );
-
-            resolve(result);
-          } catch (error) {
-            reject(error);
-          }
         })();
       })
         .on('error', (error: Error) => {
