@@ -7,4 +7,5 @@ export * from './caseActivityRepository';
 export * from './caseJudgeAssignmentRepository';
 export * from './dailyImportBatchRepository';
 export * from './importErrorDetailRepository';
+export * from './partyRepository';
 export * from './userRepository';

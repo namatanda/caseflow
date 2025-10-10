@@ -1,9 +1,11 @@
 import { Worker, Job } from 'bullmq';
+import type { Prisma } from '@prisma/client';
 import { csvImportQueue, QUEUE_NAMES } from '@/config/queue';
 import { importService } from '@/services/importService';
 import { logger } from '@/utils/logger';
 import { cleanupTempFile } from '@/middleware/upload';
 import { websocketService } from '@/services/websocketService';
+import type { CaseCsvImportPayload } from '@/services/caseCsvService';
 import {
   csvImportJobsTotal,
   csvImportDuration,
@@ -20,11 +22,7 @@ import {
 export interface CsvImportJobData {
   batchId: string;
   // Either payload (for JSON data) or filePath (for file upload)
-  payload?: {
-    cases: any[];
-    activities?: any[];
-    assignments?: any[];
-  };
+  payload?: CaseCsvImportPayload;
   filePath?: string;
   options?: {
     chunkSize?: number;
@@ -32,10 +30,39 @@ export interface CsvImportJobData {
       totalRecords: number;
       failedRecords?: number;
     };
-    errorDetails?: any[];
-    errorLogs?: any;
-    validationWarnings?: any;
+    errorDetails?: Prisma.ImportErrorDetailCreateManyInput[];
+    errorLogs?: Prisma.InputJsonValue;
+    validationWarnings?: Prisma.InputJsonValue;
     completedAt?: string;
+  };
+}
+
+// Process options type
+export interface ProcessOptions {
+  chunkSize?: number;
+  totals?: {
+    totalRecords: number;
+    failedRecords?: number;
+  };
+  errorDetails?: Prisma.ImportErrorDetailCreateManyInput[];
+  errorLogs?: Prisma.InputJsonValue;
+  validationWarnings?: Prisma.InputJsonValue;
+  completedAt?: Date;
+}
+
+// Import result type
+export interface ImportResult {
+  batchId: string;
+  totals: {
+    totalRecords: number;
+    successfulRecords: number;
+    failedRecords: number;
+  };
+  importResult: {
+    cases: number;
+    activities: number;
+    assignments: number;
+    parties: number;
   };
 }
 
@@ -104,7 +131,7 @@ export const csvImportProcessor = async (job: Job<CsvImportJobData>) => {
     const processingStartTime = Date.now();
 
     // Process the CSV batch
-    const processOptions: any = {};
+    const processOptions: ProcessOptions = {};
     if (options?.chunkSize) processOptions.chunkSize = options.chunkSize;
     if (options?.totals) processOptions.totals = options.totals;
     if (options?.errorDetails) processOptions.errorDetails = options.errorDetails;
@@ -112,31 +139,23 @@ export const csvImportProcessor = async (job: Job<CsvImportJobData>) => {
     if (options?.validationWarnings) processOptions.validationWarnings = options.validationWarnings;
     if (options?.completedAt) processOptions.completedAt = new Date(options.completedAt);
 
-    let result;
+    const rawResult = filePath
+      ? await importService.processCsvFile(batchId, filePath, processOptions)
+      : payload
+        ? await importService.processCsvBatch(batchId, payload, processOptions)
+        : null;
 
-    if (filePath) {
-      // Handle file-based import
-      result = await importService.processCsvFile(batchId, filePath, processOptions);
-    } else if (payload) {
-      // Handle payload-based import (legacy)
-      result = await importService.processCsvBatch(
-        batchId,
-        {
-          cases: payload.cases,
-          ...(payload.activities && { activities: payload.activities }),
-          ...(payload.assignments && { assignments: payload.assignments }),
-        },
-        processOptions
-      );
-    } else {
+    if (!rawResult) {
       throw new Error('Either filePath or payload must be provided');
     }
+
+    const result = rawResult as ImportResult;
 
     // Calculate batch processing metrics
     const processingDuration = (Date.now() - processingStartTime) / 1000;
     csvImportBatchProcessingDuration.observe(processingDuration);
 
-    const totalRecords = (result as any).totals.totalRecords || 0;
+    const totalRecords = result.totals.totalRecords || 0;
     const throughput = totalRecords > 0 ? totalRecords / processingDuration : 0;
     csvImportThroughput.set(throughput);
 
@@ -145,8 +164,8 @@ export const csvImportProcessor = async (job: Job<CsvImportJobData>) => {
 
     // Track batch size and records
     csvImportBatchSize.set(totalRecords);
-    csvImportRecords.inc({ status: 'successful' }, (result as any).totals.successfulRecords || 0);
-    csvImportRecords.inc({ status: 'failed' }, (result as any).totals.failedRecords || 0);
+  csvImportRecords.inc({ status: 'successful' }, result.totals.successfulRecords || 0);
+  csvImportRecords.inc({ status: 'failed' }, result.totals.failedRecords || 0);
 
     try {
       await job.updateProgress(100);
@@ -158,9 +177,9 @@ export const csvImportProcessor = async (job: Job<CsvImportJobData>) => {
     websocketService.emitImportCompleted({
       batchId,
       jobId: job.id as string,
-      totalRecords: (result as any).totals.totalRecords,
-      successfulRecords: (result as any).totals.successfulRecords,
-      failedRecords: (result as any).totals.failedRecords,
+      totalRecords: result.totals.totalRecords,
+      successfulRecords: result.totals.successfulRecords,
+      failedRecords: result.totals.failedRecords,
       duration: Date.now() - job.processedOn!,
     });
 
@@ -169,8 +188,8 @@ export const csvImportProcessor = async (job: Job<CsvImportJobData>) => {
     csvImportDuration.observe({ status: 'success' }, (Date.now() - startTime) / 1000);
 
     logger.info(`Completed CSV import job ${job.id} for batch ${batchId}`, {
-      successfulRecords: (result as any).totals.successfulRecords,
-      failedRecords: (result as any).totals.failedRecords,
+      successfulRecords: result.totals.successfulRecords,
+      failedRecords: result.totals.failedRecords,
     });
 
     // Clean up temp file after successful processing
@@ -246,8 +265,16 @@ csvImportWorker.on('failed', (job: Job<CsvImportJobData> | undefined, err: Error
   logger.error(`Job ${job?.id} failed:`, err);
 });
 
-csvImportWorker.on('progress', (job: Job<CsvImportJobData>, progress: any) => {
-  logger.debug(`Job ${job.id} progress: ${progress}%`);
+csvImportWorker.on('progress', (job: Job<CsvImportJobData>, progress) => {
+  let progressDisplay: string;
+  if (typeof progress === 'number') {
+    progressDisplay = `${progress}%`;
+  } else if (typeof progress === 'string') {
+    progressDisplay = progress;
+  } else {
+    progressDisplay = JSON.stringify(progress);
+  }
+  logger.debug(`Job ${job.id} progress: ${progressDisplay}`);
 });
 
 csvImportWorker.on('stalled', (jobId: string) => {

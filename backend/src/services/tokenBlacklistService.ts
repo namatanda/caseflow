@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { cacheManager } from '@/config/redis';
 import { logger } from '@/utils/logger';
 
@@ -110,14 +111,13 @@ export class TokenBlacklistService {
    * Create a hash of the token for logging purposes (to avoid logging sensitive token data)
    */
   private hashTokenForLogging(token: string): string {
-    const crypto = require('crypto');
     return crypto.createHash('sha256').update(token).digest('hex').substring(0, 16);
   }
 
   /**
    * Clean up expired blacklist entries (Redis TTL should handle this automatically)
    */
-  async cleanupExpiredTokens(): Promise<number> {
+  cleanupExpiredTokens(): number {
     // Redis TTL handles cleanup automatically, but this method could be used
     // for manual cleanup or monitoring
     logger.info('Token blacklist cleanup completed (Redis TTL handles expiration)');

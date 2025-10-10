@@ -175,14 +175,13 @@ export class AuthService extends BaseService<UserRepository> {
       const hashedPassword = await hashPassword(password);
 
       // Create user
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
       const user = await this.repository.create({ // eslint-disable-line @typescript-eslint/no-unsafe-assignment
         data: {
           email,
           password: hashedPassword,
           name,
           role,
-        } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+        },
       }); // eslint-disable-line @typescript-eslint/no-unsafe-assignment
 
       // Generate tokens
@@ -337,10 +336,9 @@ export class AuthService extends BaseService<UserRepository> {
       const hashedNewPassword = await hashPassword(newPassword);
 
       // Update password
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
       await this.repository.update({ // eslint-disable-line @typescript-eslint/no-unsafe-assignment
         where: { id: userId },
-        data: { password: hashedNewPassword } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+        data: { password: hashedNewPassword },
       }); // eslint-disable-line @typescript-eslint/no-unsafe-assignment
 
       // Delete all user sessions (force logout from all devices)
@@ -440,10 +438,9 @@ export class AuthService extends BaseService<UserRepository> {
       const hashedNewPassword = await hashPassword(newPassword);
 
       // Update password
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
       await this.repository.update({ // eslint-disable-line @typescript-eslint/no-unsafe-assignment
         where: { id: user.id },
-        data: { password: hashedNewPassword } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+        data: { password: hashedNewPassword },
       }); // eslint-disable-line @typescript-eslint/no-unsafe-assignment
 
       // Delete all user sessions (force logout from all devices)

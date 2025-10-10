@@ -9,13 +9,14 @@ datasource db {
 }
 
 model Court {
-  id        String    @id @default(uuid()) 
-  courtName String    @map("court_name") 
-  courtCode String    @unique @map("court_code") 
+  id        String    @id @default(uuid())
+  courtName String    @map("court_name")
+  courtCode String    @unique @map("court_code")
   courtType CourtType @map("court_type")
   isActive  Boolean   @default(true) @map("is_active")
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @default(now()) @updatedAt @map("updated_at")
+  cases                Case[]
   originalCases        Case[]                @relation("OriginalCases")
 
   @@index([courtType, isActive])
@@ -26,13 +27,19 @@ model Court {
 
 model Judge {
   id              String                @id @default(uuid())
-  fullName        String                @map("full_name") 
-  firstName       String                @map("first_name") 
-  lastName        String                @map("last_name") 
+  fullName        String                @map("full_name")
+  firstName       String                @map("first_name")
+  lastName        String                @map("last_name")
   isActive        Boolean               @default(true) @map("is_active")
   createdAt       DateTime              @default(now()) @map("created_at")
   updatedAt       DateTime              @updatedAt @map("updated_at")
   caseActivities  CaseActivity[]        @relation("PrimaryJudge")
+  judge2Activities CaseActivity[]       @relation("Judge2")
+  judge3Activities CaseActivity[]       @relation("Judge3")
+  judge4Activities CaseActivity[]       @relation("Judge4")
+  judge5Activities CaseActivity[]       @relation("Judge5")
+  judge6Activities CaseActivity[]       @relation("Judge6")
+  judge7Activities CaseActivity[]       @relation("Judge7")
   caseAssignments CaseJudgeAssignment[]
 
   @@index([fullName])
@@ -57,22 +64,20 @@ model CaseType {
 
 model Case {
   id                     String                @id @default(uuid())
-  caseNumber             String                @map("case_number") 
-  courtName              String                @map("court_name") 
-  originalCourtId        String?               @map("original_court_id") 
+  caseNumber             String                @map("case_number")
+  courtId                String                @map("court_id")
+  originalCourtId        String?               @map("original_court_id")
   caseTypeId             String                @map("case_type_id")
-  filedDate              DateTime              @map("filed_date") 
-  originalCaseNumber     String?               @map("original_case_number") 
+  filedDate              DateTime              @map("filed_date")
+  originalCaseNumber     String?               @map("original_case_number")
   originalYear           Int?                  @map("original_year")
-  parties                String
   status                 CaseStatus            @default(ACTIVE)
   lastActivityDate       DateTime?             @map("next_activity_date")
   totalActivities        Int                   @default(0) @map("total_activities")
   hasLegalRepresentation Boolean               @default(false) @map("has_legal_representation")
   createdAt              DateTime              @default(now()) @map("created_at")
   updatedAt              DateTime              @updatedAt @map("updated_at")
-  caseidType             String?               @map("caseid_type") 
-  caseidNo               String?               @map("caseid_no") 
+  caseidNo               String?               @map("caseid_no")
   maleApplicant          Int?                  @default(0) @map("male_applicant")
   femaleApplicant        Int?                  @default(0) @map("female_applicant")
   organizationApplicant  Int?                  @default(0) @map("organization_applicant")
@@ -81,17 +86,19 @@ model Case {
   organizationDefendant  Int?                  @default(0) @map("organization_defendant")
   activities             CaseActivity[]
   judgeAssignments       CaseJudgeAssignment[]
+  parties                Party[]
   caseType               CaseType              @relation(fields: [caseTypeId], references: [id])
+  court                  Court                 @relation(fields: [courtId], references: [id])
   originalCourt          Court?                @relation("OriginalCases", fields: [originalCourtId], references: [id])
 
-  @@unique([caseNumber, courtName], name: "case_number_court_unique")
+  @@unique([caseNumber, courtId], name: "case_number_court_unique")
   @@index([status, filedDate(sort: Desc)])
   @@index([caseTypeId, filedDate(sort: Desc)])
   @@index([filedDate(sort: Desc)])
   @@index([caseNumber])
-  @@index([courtName])
+  @@index([courtId])
   @@index([status])
-  
+
   @@index([lastActivityDate(sort: Desc)])
   @@index([maleApplicant])
   @@index([femaleApplicant])
@@ -105,11 +112,11 @@ model Case {
 model CaseActivity {
   id                     String           @id @default(uuid())
   caseId                 String           @map("case_id")
-  activityDate           DateTime         @map("activity_date") 
-  activityType           String           @map("activity_type") 
-  outcome                String           
+  activityDate           DateTime         @map("activity_date")
+  activityType           String           @map("activity_type")
+  outcome                String
   reasonForAdjournment   String?          @map("reason_for_adjournment")
-  nextHearingDate        DateTime?        @map("next_hearing_date") 
+  nextHearingDate        DateTime?        @map("next_hearing_date")
   primaryJudgeId         String           @map("primary_judge_id")
   hasLegalRepresentation Boolean          @map("has_legal_representation")
   applicantWitnesses     Int              @default(0) @map("applicant_witnesses")
@@ -118,20 +125,25 @@ model CaseActivity {
   details                String?
   importBatchId          String           @map("import_batch_id")
   createdAt              DateTime         @default(now()) @map("created_at")
-  judge1                 String?          @map("judge_1") 
-  judge2                 String?          @map("judge_2") 
-  judge3                 String?          @map("judge_3") 
-  judge4                 String?          @map("judge_4") 
-  judge5                 String?          @map("judge_5") 
-  judge6                 String?          @map("judge_6") 
-  judge7                 String?          @map("judge_7") 
-  comingFor              String?          @map("coming_for") 
-  legalRepString         String?          @map("legal_rep_string") 
+  judge2Id               String?          @map("judge_2_id")
+  judge3Id               String?          @map("judge_3_id")
+  judge4Id               String?          @map("judge_4_id")
+  judge5Id               String?          @map("judge_5_id")
+  judge6Id               String?          @map("judge_6_id")
+  judge7Id               String?          @map("judge_7_id")
+  comingFor              String?          @map("coming_for")
+  legalRepString         String?          @map("legal_rep_string")
   custodyNumeric         Int?             @map("custody_numeric")
   otherDetails           String?          @map("other_details")
   case                   Case             @relation(fields: [caseId], references: [id], onDelete: Cascade)
   importBatch            DailyImportBatch @relation(fields: [importBatchId], references: [id])
   primaryJudge           Judge            @relation("PrimaryJudge", fields: [primaryJudgeId], references: [id])
+  judge2                 Judge?           @relation("Judge2", fields: [judge2Id], references: [id])
+  judge3                 Judge?           @relation("Judge3", fields: [judge3Id], references: [id])
+  judge4                 Judge?           @relation("Judge4", fields: [judge4Id], references: [id])
+  judge5                 Judge?           @relation("Judge5", fields: [judge5Id], references: [id])
+  judge6                 Judge?           @relation("Judge6", fields: [judge6Id], references: [id])
+  judge7                 Judge?           @relation("Judge7", fields: [judge7Id], references: [id])
 
   @@index([caseId, activityDate(sort: Desc)])
   @@index([activityDate(sort: Desc)])
@@ -143,12 +155,12 @@ model CaseActivity {
   @@index([comingFor])
   @@index([legalRepString])
   @@index([custodyNumeric])
-  @@index([judge2], map: "case_activities_judge2_idx")
-  @@index([judge3], map: "case_activities_judge3_idx")
-  @@index([judge4], map: "case_activities_judge4_idx")
-  @@index([judge5], map: "case_activities_judge5_idx")
-  @@index([judge6], map: "case_activities_judge6_idx")
-  @@index([judge7], map: "case_activities_judge7_idx")
+  @@index([judge2Id], map: "case_activities_judge2_idx")
+  @@index([judge3Id], map: "case_activities_judge3_idx")
+  @@index([judge4Id], map: "case_activities_judge4_idx")
+  @@index([judge5Id], map: "case_activities_judge5_idx")
+  @@index([judge6Id], map: "case_activities_judge6_idx")
+  @@index([judge7Id], map: "case_activities_judge7_idx")
   @@map("case_activities")
 }
 
@@ -285,4 +297,26 @@ enum ErrorSeverity {
   INFO
 
   @@map("error_severity")
+}
+
+enum PartyType {
+  APPLICANT
+  DEFENDANT
+
+  @@map("party_type")
+}
+
+model Party {
+  id             String    @id @default(uuid())
+  caseId         String    @map("case_id")
+  name           String?
+  type           PartyType
+  isOrganization Boolean   @default(false) @map("is_organization")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  case           Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
+  @@index([type])
+  @@map("parties")
 }

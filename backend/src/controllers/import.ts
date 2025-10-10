@@ -1,16 +1,6 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { calculateFileChecksum } from '@/utils/checksum';
-import { Prisma } from '@prisma/client';
-
-// Extend Request interface for multer
-declare global {
-  namespace Express {
-    interface Request {
-      file?: Express.Multer.File;
-      body: any; // Allow any body for form data
-    }
-  }
-}
+import { Prisma, CaseStatus } from '@prisma/client';
 
 import {
   importService,
@@ -29,12 +19,73 @@ const CSV_HEADERS = [
   'totalActivities',
 ];
 
-const escapeCsvValue = (value: unknown): string => {
+type ImportMetadataPayload = {
+  importDate?: string;
+  createdBy?: string;
+  estimatedCompletionTime?: string;
+  userConfig?: Prisma.InputJsonValue;
+  validationWarnings?: Prisma.InputJsonValue;
+  emptyRowsSkipped?: number;
+};
+
+type ImportOptionsPayload = {
+  chunkSize?: number;
+  errorDetails?: Prisma.ImportErrorDetailCreateManyInput[];
+  errorLogs?: Prisma.InputJsonValue;
+  validationWarnings?: Prisma.InputJsonValue;
+  completedAt?: string;
+};
+
+const parseJson = <T>(value: string | undefined): T | undefined => {
+  if (!value || value.trim().length === 0) {
+    return undefined;
+  }
+
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return undefined;
+  }
+};
+
+type FormBodyRecord = Record<string, string | string[] | undefined>;
+type BatchStatusQuery = { includeErrors?: string | string[] };
+type RecentBatchesQuery = { limit?: string | string[] };
+type ExportCasesQuery = {
+  courtName?: string | string[];
+  caseTypeId?: string | string[];
+  status?: string | string[];
+  filedFrom?: string | string[];
+  filedTo?: string | string[];
+  pageSize?: string | string[];
+};
+
+const emptyFormBody: FormBodyRecord = {};
+
+const toFormBody = (body: FormBodyRecord | undefined | null): FormBodyRecord => body ?? emptyFormBody;
+
+const pickFormValue = (value: string | string[] | undefined): string | undefined => {
+  if (Array.isArray(value)) {
+    const first = value[0];
+    return typeof first === 'string' ? first : undefined;
+  }
+  return value;
+};
+
+const getUserId = (req: Request): string | undefined => {
+  const possibleUser = (req as { user?: { id?: string } | null }).user;
+  if (possibleUser && typeof possibleUser.id === 'string') {
+    return possibleUser.id;
+  }
+  return undefined;
+};
+
+const escapeCsvValue = (value: string | number | boolean | Date | null | undefined): string => {
   if (value === null || typeof value === 'undefined') {
     return '';
   }
 
-  const stringValue = String(value);
+  const stringValue = value instanceof Date ? value.toISOString() : String(value);
   if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
     return '"' + stringValue.replace(/"/g, '""') + '"';
   }
@@ -42,10 +93,8 @@ const escapeCsvValue = (value: unknown): string => {
   return stringValue;
 };
 
-
-
-const parseDate = (value: unknown): Date | undefined => {
-  if (typeof value === 'string' || value instanceof Date) {
+const parseDate = (value: string | number | Date | null | undefined): Date | undefined => {
+  if (typeof value === 'string' || typeof value === 'number' || value instanceof Date) {
     const date = new Date(value);
     if (!Number.isNaN(date.getTime())) {
       return date;
@@ -54,27 +103,30 @@ const parseDate = (value: unknown): Date | undefined => {
   return undefined;
 };
 
-const toCaseSearchParams = (query: any): CaseSearchParams => {
+const toCaseSearchParams = (query: ExportCasesQuery): CaseSearchParams => {
   const params: CaseSearchParams = {};
 
-  if (typeof query['courtName'] === 'string') {
-    params.courtName = query['courtName'];
+  const courtName = pickFormValue(query.courtName);
+  if (courtName) {
+    params.courtName = courtName;
   }
 
-  if (typeof query['caseTypeId'] === 'string') {
-    params.caseTypeId = query['caseTypeId'];
+  const caseTypeId = pickFormValue(query.caseTypeId);
+  if (caseTypeId) {
+    params.caseTypeId = caseTypeId;
   }
 
-  if (typeof query['status'] === 'string') {
-    params.status = query['status'] as any;
+  const status = pickFormValue(query.status);
+  if (status) {
+    params.status = status as CaseStatus;
   }
 
-  const filedFrom = parseDate(query['filedFrom']);
+  const filedFrom = parseDate(pickFormValue(query.filedFrom));
   if (filedFrom) {
     params.filedFrom = filedFrom;
   }
 
-  const filedTo = parseDate(query['filedTo']);
+  const filedTo = parseDate(pickFormValue(query.filedTo));
   if (filedTo) {
     params.filedTo = filedTo;
   }
@@ -85,7 +137,11 @@ const toCaseSearchParams = (query: any): CaseSearchParams => {
 export class ImportController {
   constructor(private readonly service: ImportService = importService) {}
 
-  async uploadCsv(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async uploadCsv(
+  req: Request<Record<string, string>, Record<string, never>, FormBodyRecord>,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
     try {
       // Check if file was uploaded
       if (!req.file) {
@@ -94,33 +150,18 @@ export class ImportController {
       }
 
       // Parse metadata and options from form data (they come as strings)
-      let metadata: Record<string, unknown> = {};
-      let options: Record<string, unknown> = {};
+  const formBody = toFormBody(req.body);
+      const metadata = parseJson<ImportMetadataPayload>(pickFormValue(formBody['metadata'])) ?? {};
+      const options = parseJson<ImportOptionsPayload>(pickFormValue(formBody['options'])) ?? {};
 
-      try {
-        if (req.body.metadata) {
-          metadata = JSON.parse(req.body.metadata);
-        }
-      } catch (error) {
-        // Invalid JSON, use empty object
-      }
-
-      try {
-        if (req.body.options) {
-          options = JSON.parse(req.body.options);
-        }
-      } catch (error) {
-        // Invalid JSON, use empty object
-      }
-
-      const importDate = parseDate(metadata['importDate']) ?? new Date();
+      const importDate = parseDate(metadata.importDate) ?? new Date();
       const fileSize = req.file.size;
-      const createdBy = req.user?.id ?? (typeof metadata['createdBy'] === 'string' ? metadata['createdBy'] : undefined);
+      const createdBy = getUserId(req) ?? metadata.createdBy;
       if (!createdBy) {
         res.status(400).json({ message: 'Authenticated user context is required to create import batches.' });
         return;
       }
-      const estimatedCompletionTime = parseDate(metadata['estimatedCompletionTime']);
+      const estimatedCompletionTime = parseDate(metadata.estimatedCompletionTime);
 
       // Calculate file checksum
       const checksumResult = await calculateFileChecksum(req.file.path, 'md5');
@@ -139,34 +180,34 @@ export class ImportController {
       if (estimatedCompletionTime) {
         batchInput.estimatedCompletionTime = estimatedCompletionTime;
       }
-      if (metadata['userConfig'] !== undefined && metadata['userConfig'] !== null) {
-        batchInput.userConfig = metadata['userConfig'] as Prisma.InputJsonValue;
+      if (metadata.userConfig !== undefined && metadata.userConfig !== null) {
+        batchInput.userConfig = metadata.userConfig;
       }
-      if (metadata['validationWarnings'] !== undefined && metadata['validationWarnings'] !== null) {
-        batchInput.validationWarnings = metadata['validationWarnings'] as Prisma.InputJsonValue;
+      if (metadata.validationWarnings !== undefined && metadata.validationWarnings !== null) {
+        batchInput.validationWarnings = metadata.validationWarnings;
       }
-      if (typeof metadata['emptyRowsSkipped'] === 'number') {
-        batchInput.emptyRowsSkipped = metadata['emptyRowsSkipped'];
+      if (typeof metadata.emptyRowsSkipped === 'number') {
+        batchInput.emptyRowsSkipped = metadata.emptyRowsSkipped;
       }
 
       const batch = await this.service.createBatch(batchInput);
 
       // Queue the CSV processing job with file path
       const processOptions: ProcessCsvBatchOptions = {};
-      if (typeof options['chunkSize'] === 'number') {
-        processOptions.chunkSize = options['chunkSize'];
+      if (typeof options.chunkSize === 'number') {
+        processOptions.chunkSize = options.chunkSize;
       }
-      if (Array.isArray(options['errorDetails'])) {
-        processOptions.errorDetails = options['errorDetails'] as Prisma.ImportErrorDetailCreateManyInput[];
+      if (Array.isArray(options.errorDetails) && options.errorDetails.length > 0) {
+        processOptions.errorDetails = options.errorDetails;
       }
-      if (options['errorLogs'] !== undefined && options['errorLogs'] !== null) {
-        processOptions.errorLogs = options['errorLogs'] as Prisma.InputJsonValue;
+      if (options.errorLogs !== undefined && options.errorLogs !== null) {
+        processOptions.errorLogs = options.errorLogs;
       }
-      if (options['validationWarnings'] !== undefined && options['validationWarnings'] !== null) {
-        processOptions.validationWarnings = options['validationWarnings'] as Prisma.InputJsonValue;
+      if (options.validationWarnings !== undefined && options.validationWarnings !== null) {
+        processOptions.validationWarnings = options.validationWarnings;
       }
 
-      const completedAt = parseDate(options['completedAt']);
+      const completedAt = parseDate(options.completedAt);
       if (completedAt) {
         processOptions.completedAt = completedAt;
       }
@@ -188,16 +229,20 @@ export class ImportController {
     }
   }
 
-  async getBatchStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async getBatchStatus(
+    req: Request<{ batchId: string }, Record<string, never>, Record<string, never>, BatchStatusQuery>,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
     try {
-   const batchId = req.params['batchId'];
+  const batchId = req.params.batchId;
       if (!batchId) {
         res.status(400).json({ message: 'Batch ID is required.' });
         return;
       }
 
       const batch = await this.service.getBatchById(batchId, {
-   includeErrorDetails: req.query['includeErrors'] === 'true',
+        includeErrorDetails: pickFormValue(req.query.includeErrors) === 'true',
       });
 
       if (!batch) {
@@ -211,9 +256,9 @@ export class ImportController {
     }
   }
 
-  async getJobStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async getJobStatus(req: Request<{ jobId: string }>, res: Response, next: NextFunction): Promise<void> {
     try {
-      const jobId = req.params['jobId'];
+  const jobId = req.params.jobId;
       if (!jobId) {
         res.status(400).json({ message: 'Job ID is required.' });
         return;
@@ -231,9 +276,14 @@ export class ImportController {
     }
   }
 
-  async listRecentBatches(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async listRecentBatches(
+    req: Request<Record<string, string>, Record<string, never>, Record<string, never>, RecentBatchesQuery>,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
     try {
-  const limit = typeof req.query['limit'] === 'string' ? Number.parseInt(req.query['limit'], 10) : 10;
+  const limitInput = pickFormValue(req.query.limit);
+      const limit = typeof limitInput === 'string' ? Number.parseInt(limitInput, 10) : 10;
       const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(limit, 100) : 10;
 
       const batches = await this.service.getRecentBatches(safeLimit);
@@ -243,10 +293,15 @@ export class ImportController {
     }
   }
 
-  async exportCases(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async exportCases(
+    req: Request<Record<string, string>, Record<string, never>, Record<string, never>, ExportCasesQuery>,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
     try {
   const params = toCaseSearchParams(req.query);
-  const pageSize = typeof req.query['pageSize'] === 'string' ? Number.parseInt(req.query['pageSize'], 10) : undefined;
+  const pageSizeValue = pickFormValue(req.query.pageSize);
+      const pageSize = typeof pageSizeValue === 'string' ? Number.parseInt(pageSizeValue, 10) : undefined;
       const safePageSize = typeof pageSize === 'number' && Number.isFinite(pageSize) && pageSize >= 1 ? pageSize : undefined;
 
       res.setHeader('Content-Type', 'text/csv');

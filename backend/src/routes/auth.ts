@@ -233,7 +233,7 @@ router.post('/refresh', asyncHandler(authController.refreshToken.bind(authContro
  *       401:
  *         description: Authentication required
  */
-router.post('/logout', authenticateToken, asyncHandler(authController.logout.bind(authController)));
+router.post('/logout', asyncHandler(authenticateToken), asyncHandler(authController.logout.bind(authController)));
 
 /**
  * @swagger
@@ -284,7 +284,7 @@ router.post('/logout', authenticateToken, asyncHandler(authController.logout.bin
  *       401:
  *         description: Authentication required
  */
-router.get('/me', authenticateToken, asyncHandler(authController.getProfile.bind(authController)));
+router.get('/me', asyncHandler(authenticateToken), asyncHandler(authController.getProfile.bind(authController)));
 
 /**
  * @swagger
@@ -337,7 +337,7 @@ router.get('/me', authenticateToken, asyncHandler(authController.getProfile.bind
  *         description: Authentication required
  */
 // Keep /profile for backward compatibility
-router.get('/profile', authenticateToken, asyncHandler(authController.getProfile.bind(authController)));
+router.get('/profile', asyncHandler(authenticateToken), asyncHandler(authController.getProfile.bind(authController)));
 
 /**
  * @swagger
@@ -382,7 +382,7 @@ router.get('/profile', authenticateToken, asyncHandler(authController.getProfile
  *       422:
  *         description: New password validation failed
  */
-router.post('/change-password', authenticateToken, asyncHandler(authController.changePassword.bind(authController)));
+router.post('/change-password', asyncHandler(authenticateToken), asyncHandler(authController.changePassword.bind(authController)));
 
 /**
  * @swagger

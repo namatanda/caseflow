@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs/promises';
-import { uploadCsv, cleanupTempFile, cleanupOldTempFiles, TEMP_DIR, UPLOADS_DIR } from '../../middleware/upload';
+import { cleanupTempFile, cleanupOldTempFiles, TEMP_DIR, UPLOADS_DIR } from '../../middleware/upload';
 import { ApiError } from '../../middleware/errorHandler';
 
 // Mock dependencies

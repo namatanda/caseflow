@@ -21,18 +21,11 @@ module.exports = {
     {
       files: ['src/tests/**/*.ts', '**/*.test.ts'],
       rules: {
-        '@typescript-eslint/no-unsafe-assignment': 'off',
-        '@typescript-eslint/no-unsafe-member-access': 'off',
-        '@typescript-eslint/no-unsafe-call': 'off',
-        '@typescript-eslint/no-unsafe-return': 'off',
-        '@typescript-eslint/no-unsafe-argument': 'off',
-        '@typescript-eslint/no-explicit-any': 'off',
-        '@typescript-eslint/require-await': 'off',
-        '@typescript-eslint/await-thenable': 'off',
-        'no-useless-catch': 'off'
+        '@typescript-eslint/unbound-method': 'off'
       }
     }
   ],
+
   rules: {
     '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     '@typescript-eslint/explicit-function-return-type': 'off',

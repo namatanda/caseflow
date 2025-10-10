@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vites
 import { websocketService } from '../../services/websocketService';
 import { csvImportQueue } from '../../config/queue';
 import type { Server as HttpServer } from 'http';
-import { createReadStream, writeFileSync, unlinkSync } from 'fs';
+import { writeFileSync, unlinkSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
@@ -44,7 +44,7 @@ describe('CSV Import Integration Tests', () => {
   });
 
   afterAll(async () => {
-    websocketService.close();
+    await websocketService.close();
     await csvImportQueue.close();
   });
 
@@ -74,7 +74,7 @@ CASE-003,Test Case 3,Description 3,closed,low,user3@example.com`;
 
     it('should process valid CSV file from start to finish', async () => {
       const batchId = `batch_${Date.now()}`;
-      const jobId = `job_${Date.now()}`;
+      const _jobId = `job_${Date.now()}`;
 
       // Mock database responses
       mockPrisma.importBatch.create.mockResolvedValue({

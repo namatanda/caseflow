@@ -3,7 +3,7 @@ process.env['DATABASE_URL'] = 'postgresql://test:test@localhost:5432/courtflow_t
 import { calculateFileChecksum } from '../../utils/checksum';
 import { parseCsvFile } from '../../utils/csvParser';
 import { websocketService } from '../../services/websocketService';
-import { validateRequest } from '../../middleware/validation';
+import { validateBody } from '../../middleware/validation';
 import { z } from 'zod';
 import type { Server as HttpServer } from 'http';
 
@@ -36,8 +36,8 @@ describe('Phase 1 Integration Tests', () => {
     fs = await import('fs');
   });
 
-  afterEach(() => {
-    websocketService.close();
+  afterEach(async () => {
+    await websocketService.close();
   });
 
   describe('CSV Import Pipeline Integration', () => {
@@ -76,7 +76,6 @@ describe('Phase 1 Integration Tests', () => {
       expect(checksumResult.checksum.length).toBe(32); // MD5 length
 
       // 2. CSV parsing and validation
-      const csvParser = await import('csv-parser');
       const mockCsvParser = vi.fn(() => ({
         on: vi.fn(function (event, handler) {
           if (event === 'headers') {
@@ -163,8 +162,8 @@ describe('Phase 1 Integration Tests', () => {
 
       const mockNext = vi.fn();
 
-      const validationMiddleware = validateRequest({ body: schema });
-      validationMiddleware(mockReq as any, mockRes as any, mockNext);
+      const validationMiddleware = validateBody(schema);
+      await validationMiddleware(mockReq as any, mockRes as any, mockNext);
 
       // Should pass validation with our integrated data
       expect(mockNext).toHaveBeenCalledWith();
@@ -209,7 +208,7 @@ describe('Phase 1 Integration Tests', () => {
       ).rejects.toThrow('File access denied');
 
       // 2. WebSocket error handling (when not initialized)
-      websocketService.close(); // Ensure not initialized
+      await websocketService.close(); // Ensure not initialized
 
       // Should not throw when emitting to uninitialized service
       expect(() => {
@@ -239,8 +238,8 @@ describe('Phase 1 Integration Tests', () => {
 
       const mockNext = vi.fn();
 
-      const validationMiddleware = validateRequest({ body: strictSchema });
-      validationMiddleware(mockReq as any, mockRes as any, mockNext);
+      const validationMiddleware = validateBody(strictSchema);
+      await validationMiddleware(mockReq as any, mockRes as any, mockNext);
 
       expect(mockNext).toHaveBeenCalled();
       const error = mockNext.mock.calls[0][0];

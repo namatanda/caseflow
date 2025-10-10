@@ -35,7 +35,15 @@ const csvFileFilter = (_req: Express.Request, file: Express.Multer.File, cb: mul
   }
 
   // Check mime type
-  const allowedMimes = ['text/csv', 'application/csv', 'text/plain'];
+  const allowedMimes = [
+    'text/csv',
+    'application/csv',
+    'text/plain',
+    'application/vnd.ms-excel',
+    'text/x-csv',
+    'application/x-csv',
+    'text/comma-separated-values'
+  ];
   if (!allowedMimes.includes(file.mimetype)) {
     return cb(new ApiError('Invalid file type. Only CSV files are allowed', 400));
   }
@@ -45,13 +53,14 @@ const csvFileFilter = (_req: Express.Request, file: Express.Multer.File, cb: mul
 
 // Storage configuration for temp files
 const tempStorage = multer.diskStorage({
-  destination: async (_req, _file, cb) => {
-    try {
-      await ensureDirectoriesExist();
-      cb(null, TEMP_DIR);
-    } catch (error) {
-      cb(error as Error, TEMP_DIR);
-    }
+  destination: (_req, _file, cb) => {
+    ensureDirectoriesExist()
+      .then(() => {
+        cb(null, TEMP_DIR);
+      })
+      .catch((error) => {
+        cb(error as Error, TEMP_DIR);
+      });
   },
   filename: (_req, file, cb) => {
     // Generate unique filename with timestamp

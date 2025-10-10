@@ -1,6 +1,21 @@
 import type { Request, Response, NextFunction } from 'express';
-import { AuthService, type LoginCredentials, type RegisterData } from '@/services/authService';
+import { AuthService, type LoginCredentials, type RegisterData, type PasswordResetRequest, type PasswordResetData } from '@/services/authService';
 import { logger } from '@/utils/logger';
+
+interface LoginRequestBody extends LoginCredentials {}
+
+interface RegisterRequestBody extends RegisterData {}
+
+interface RefreshTokenRequestBody {
+  refreshToken: string;
+}
+
+interface ChangePasswordRequestBody {
+  currentPassword: string;
+  newPassword: string;
+}
+
+interface RequestPasswordResetRequestBody extends PasswordResetRequest {}
 
 /**
  * Build service context from request
@@ -21,7 +36,7 @@ export class AuthController {
    */
   async login(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const credentials: LoginCredentials = req.body;
+      const credentials: LoginCredentials = req.body as LoginRequestBody;
 
       // Validate required fields
       if (!credentials.email || !credentials.password) {
@@ -48,7 +63,7 @@ export class AuthController {
       });
     } catch (error) {
       logger.warn('Login failed', {
-        email: req.body.email,
+        email: (req.body as LoginRequestBody).email,
         error: error instanceof Error ? error.message : 'Unknown error',
         correlationId: req.correlationId,
       });
@@ -62,7 +77,7 @@ export class AuthController {
    */
   async register(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const data: RegisterData = req.body;
+      const data: RegisterData = req.body as RegisterRequestBody;
 
       // Validate required fields
       if (!data.email || !data.password || !data.name) {
@@ -89,7 +104,7 @@ export class AuthController {
       });
     } catch (error) {
       logger.warn('Registration failed', {
-        email: req.body.email,
+        email: (req.body as RegisterRequestBody).email,
         error: error instanceof Error ? error.message : 'Unknown error',
         correlationId: req.correlationId,
       });
@@ -103,7 +118,7 @@ export class AuthController {
    */
   async refreshToken(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { refreshToken } = req.body;
+      const { refreshToken } = req.body as RefreshTokenRequestBody;
 
       if (!refreshToken) {
         res.status(400).json({
@@ -212,7 +227,7 @@ export class AuthController {
   async changePassword(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = req.user?.id;
-      const { currentPassword, newPassword } = req.body;
+      const { currentPassword, newPassword } = req.body as ChangePasswordRequestBody;
 
       if (!userId) {
         res.status(401).json({
@@ -257,7 +272,7 @@ export class AuthController {
    */
   async requestPasswordReset(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { email } = req.body;
+      const { email }: { email: string } = req.body;
 
       if (!email) {
         res.status(400).json({
@@ -281,7 +296,7 @@ export class AuthController {
       });
     } catch (error) {
       logger.warn('Password reset request failed', {
-        email: req.body.email,
+        email: (req.body as RequestPasswordResetRequestBody).email,
         error: error instanceof Error ? error.message : 'Unknown error',
         correlationId: req.correlationId,
       });
@@ -295,7 +310,7 @@ export class AuthController {
    */
   async resetPassword(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { token, newPassword } = req.body;
+      const { token, newPassword } = req.body as PasswordResetData;
 
       if (!token || !newPassword) {
         res.status(400).json({

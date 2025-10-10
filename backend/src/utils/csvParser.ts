@@ -10,7 +10,7 @@ export interface CsvParseOptions {
   /** Custom headers (if CSV doesn't have headers) */
   headers?: string[];
   /** Validate each row with a schema */
-  validationSchema?: z.ZodType<any>;
+  validationSchema?: z.ZodType<unknown>;
   /** Continue parsing on validation errors */
   continueOnError?: boolean;
   /** Custom separator */
@@ -19,12 +19,12 @@ export interface CsvParseOptions {
 
 export interface CsvRowError {
   row: number;
-  data: any;
+data: unknown;
   error: string;
   field?: string;
 }
 
-export interface CsvParseResult<T = any> {
+export interface CsvParseResult<T = unknown> {
   /** Successfully parsed rows */
   data: T[];
   /** Rows that failed validation */
@@ -46,7 +46,7 @@ export interface CsvParseResult<T = any> {
 /**
  * Parse CSV file with validation and error handling
  */
-export async function parseCsvFile<T = any>(
+export async function parseCsvFile<T = unknown>(
   filePath: string,
   options: CsvParseOptions = {}
 ): Promise<CsvParseResult<T>> {
@@ -71,12 +71,11 @@ export async function parseCsvFile<T = any>(
   let hasReachedMaxRows = false;
 
   return new Promise((resolve, reject) => {
-    const csvOptions: any = { separator };
+    const csvOptions: { separator: string; headers?: string[] } = { separator };
     if (headers) {
       csvOptions.headers = headers;
     }
-
-    const stream: any = createReadStream(filePath);
+const stream = createReadStream(filePath);
     
     stream
       .pipe(csv.default(csvOptions))
@@ -84,8 +83,7 @@ export async function parseCsvFile<T = any>(
         detectedHeaders = headersList;
         logger.debug(`CSV headers detected: ${headersList.join(', ')}`);
       })
-      .on('data', (row: any) => {
-        if (maxRows > 0 && rowNumber >= maxRows) {
+      .on('data', (row: unknown) => {
           if (!hasReachedMaxRows) {
             warnings.push(`Maximum row limit of ${maxRows} reached. Remaining rows not processed.`);
             hasReachedMaxRows = true;
@@ -201,13 +199,13 @@ export async function validateCsvStructure(
  */
 export async function getCsvStats(
   filePath: string
-): Promise<{ rowCount: number; headers: string[]; sampleRows: any[] }> {
+): Promise<{ rowCount: number; headers: string[]; sampleRows: unknown[] }> {
   const csv = await import('csv-parser');
   
   return new Promise((resolve, reject) => {
     let rowCount = 0;
     let detectedHeaders: string[] = [];
-    const sampleRows: any[] = [];
+    const sampleRows: unknown[] = [];
     const sampleSize = 5;
 
     const stream: any = createReadStream(filePath);
@@ -217,7 +215,7 @@ export async function getCsvStats(
       .on('headers', (headers: string[]) => {
         detectedHeaders = headers;
       })
-      .on('data', (row: any) => {
+      .on('data', (row: unknown) => {
         rowCount++;
         if (sampleRows.length < sampleSize) {
           sampleRows.push(row);
@@ -242,10 +240,10 @@ export async function getCsvStats(
 export async function detectDuplicates(
   filePath: string,
   uniqueFields: string[]
-): Promise<{ duplicates: Array<{ row: number; data: any; duplicateOf: number }> }> {
+): Promise<{ duplicates: Array<{ row: number; data: unknown; duplicateOf: number }> }> {
   const csv = await import('csv-parser');
   const seen = new Map<string, number>();
-  const duplicates: Array<{ row: number; data: any; duplicateOf: number }> = [];
+  const duplicates: Array<{ row: number; data: unknown; duplicateOf: number }> = [];
   let rowNumber = 0;
 
   return new Promise((resolve, reject) => {
@@ -253,7 +251,7 @@ export async function detectDuplicates(
     
     stream
       .pipe(csv.default())
-      .on('data', (row: any) => {
+      .on('data', (row: unknown) => {
         rowNumber++;
 
         const key = uniqueFields.map((field) => row[field] || '').join('|');

@@ -1,6 +1,7 @@
 import { Queue } from 'bullmq';
 import { config } from './environment';
 import { logger } from '@/utils/logger';
+import type { CsvImportJobData } from '@/workers/csvImportWorker';
 
 // Queue names
 export const QUEUE_NAMES = {
@@ -23,7 +24,7 @@ const { host, port } = parseRedisUrl(config.redis.url);
 const bullMQConnection = {
   host,
   port,
-  maxRetriesPerRequest: null, // Required for BullMQ
+  maxRetriesPerRequest: null,
   enableReadyCheck: false,
   enableOfflineQueue: true,
 };
@@ -44,12 +45,10 @@ const queueConfigs = {
 };
 
 // Create queues with connection config
-export const csvImportQueue = new Queue(QUEUE_NAMES.CSV_IMPORT, {
+export const csvImportQueue = new Queue<CsvImportJobData>(QUEUE_NAMES.CSV_IMPORT, {
   connection: bullMQConnection,
   ...queueConfigs[QUEUE_NAMES.CSV_IMPORT],
 });
-
-// Note: QueueScheduler is not available in BullMQ v5. Using built-in delayed job handling
 
 // Queue health check
 export async function checkQueueHealth(): Promise<{
@@ -72,7 +71,7 @@ export async function checkQueueHealth(): Promise<{
       csvImportQueue.getDelayed(),
     ]);
 
-    const isHealthy = true; // Queues are always "healthy" if Redis is connected
+    const isHealthy = true;
 
     return {
       isHealthy,

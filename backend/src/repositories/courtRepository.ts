@@ -29,6 +29,21 @@ export class CourtRepository extends BaseRepository<CourtDelegate> {
     });
   }
 
+  async findByName(
+    courtName: string,
+    options: { includeInactive?: boolean; include?: Prisma.CourtInclude } = {}
+  ) {
+    const { includeInactive = false, include = defaultInclude } = options;
+
+    return this.delegate.findFirst({
+      where: {
+        courtName,
+        ...(includeInactive ? {} : { isActive: true }),
+      },
+      include,
+    });
+  }
+
   async findActive(options: { include?: Prisma.CourtInclude } = {}) {
     const { include = defaultInclude } = options;
 

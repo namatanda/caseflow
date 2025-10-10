@@ -15,6 +15,7 @@ export interface CaseCsvImportPayload {
   cases: Prisma.CaseCreateManyInput[];
   activities?: Prisma.CaseActivityCreateManyInput[];
   assignments?: Prisma.CaseJudgeAssignmentCreateManyInput[];
+  parties?: Prisma.PartyCreateManyInput[];
 }
 
 export interface CaseCsvImportOptions {
@@ -38,10 +39,12 @@ export class CaseCsvService extends BaseService<CaseRepository> {
       const transactionalCaseRepo = new CaseRepository(tx.case);
       const transactionalActivityRepo = new CaseActivityRepository(tx.caseActivity);
       const transactionalAssignmentRepo = new CaseJudgeAssignmentRepository(tx.caseJudgeAssignment);
+      const transactionalPartyRepo = tx.party; // Assuming tx has party
 
       let createdCases = 0;
       let createdActivities = 0;
       let createdAssignments = 0;
+      let createdParties = 0;
 
       for (const chunk of chunkArray(payload.cases, chunkSize)) {
         const result = await transactionalCaseRepo.createMany(chunk);
@@ -62,10 +65,18 @@ export class CaseCsvService extends BaseService<CaseRepository> {
         }
       }
 
+      if (payload.parties?.length) {
+        for (const chunk of chunkArray(payload.parties, chunkSize)) {
+          const result = await transactionalPartyRepo.createMany({ data: chunk });
+          createdParties += result.count;
+        }
+      }
+
       return {
         cases: createdCases,
         activities: createdActivities,
         assignments: createdAssignments,
+        parties: createdParties,
       };
     });
   }

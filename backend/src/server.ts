@@ -454,11 +454,11 @@ const gracefulShutdown = async (signal: NodeJS.Signals) => {
 };
 
 process.on('SIGTERM', () => {
-  gracefulShutdown('SIGTERM');
+  void gracefulShutdown('SIGTERM');
 });
 
 process.on('SIGINT', () => {
-  gracefulShutdown('SIGINT');
+  void gracefulShutdown('SIGINT');
 });
 
 export default app;

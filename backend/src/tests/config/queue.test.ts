@@ -36,7 +36,7 @@ vi.mock('@/utils/logger', () => ({
   },
 }));
 
-import { Queue } from 'bullmq';
+
 import { QUEUE_NAMES, csvImportQueue, checkQueueHealth, closeQueues, queues } from '../../config/queue';
 import { logger } from '../../utils/logger';
 

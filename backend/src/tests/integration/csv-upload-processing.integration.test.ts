@@ -30,7 +30,7 @@ const mockResponse = () => {
 const mockNext = vi.fn();
 
 // Use in-memory SQLite database for testing with unique name
-const DATABASE_URL = `file::memory:${Date.now()}?cache=shared`;
+
 
 describe('CSV Upload and Processing Integration Test', () => {
   let prisma: PrismaClient;
@@ -115,7 +115,6 @@ describe('CSV Upload and Processing Integration Test', () => {
         has_legal_representation BOOLEAN DEFAULT false,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME,
-        caseid_type TEXT,
         caseid_no TEXT,
         male_applicant INTEGER DEFAULT 0,
         female_applicant INTEGER DEFAULT 0,

@@ -10,4 +10,5 @@ export * from './caseCsvService';
 export * from './dailyImportBatchService';
 export * from './importErrorDetailService';
 export * from './importService';
+export * from './partyService';
 export * from './userService';

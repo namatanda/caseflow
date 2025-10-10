@@ -5,6 +5,7 @@ const {
   csvServiceMock,
   batchServiceMock,
   caseTypeRepositoryMock,
+  courtRepositoryMock,
 } = vi.hoisted(() => {
   const repositoryMock = {
     create: vi.fn(),
@@ -28,11 +29,18 @@ const {
     create: vi.fn(),
   };
 
+  const courtRepositoryMock = {
+    findByName: vi.fn(),
+    findByCode: vi.fn(),
+    create: vi.fn(),
+  };
+
   return {
     repositoryMock,
     csvServiceMock,
     batchServiceMock,
     caseTypeRepositoryMock,
+    courtRepositoryMock,
   };
 });
 
@@ -69,7 +77,8 @@ const createService = () =>
     repositoryMock as any,
     csvServiceMock as any,
     batchServiceMock as any,
-    caseTypeRepositoryMock as any
+    caseTypeRepositoryMock as any,
+    courtRepositoryMock as any
   );
 
 describe('ImportService', () => {

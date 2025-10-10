@@ -7,20 +7,20 @@ import { logger } from '@/utils/logger';
  * Validation middleware factory
  * Creates middleware that validates request data against a Zod schema
  */
-export function validateRequest(schema: z.ZodType<any>) {
+export function validateRequest<T extends z.ZodType<unknown>>(schema: T) {
   return async (req: Request, _res: Response, next: NextFunction) => {
     try {
       // Validate the entire request object (params, query, body)
       const validated = await schema.parseAsync({
-        body: (req as any).body,
-        query: (req as any).query,
-        params: (req as any).params,
+        body: req.body,
+        query: req.query,
+        params: req.params,
       });
 
       // Replace request data with validated data
-      (req as any).body = validated.body || (req as any).body;
-      (req as any).query = validated.query || (req as any).query;
-      (req as any).params = validated.params || (req as any).params;
+      req.body = validated.body || req.body;
+      req.query = validated.query || req.query;
+      req.params = validated.params || req.params;
 
       next();
     } catch (error) {
@@ -31,8 +31,8 @@ export function validateRequest(schema: z.ZodType<any>) {
         });
 
         logger.warn('Request validation failed', {
-          path: (req as any).path,
-          method: (req as any).method,
+          path: req.path,
+          method: req.method,
           errors: errorMessages,
         });
 
@@ -52,11 +52,11 @@ export function validateRequest(schema: z.ZodType<any>) {
 /**
  * Validate request body only
  */
-export function validateBody(schema: z.ZodType<any>) {
+export function validateBody<T extends z.ZodType<unknown>>(schema: T) {
   return async (req: Request, _res: Response, next: NextFunction) => {
     try {
-      const validated = await schema.parseAsync((req as any).body);
-      (req as any).body = validated;
+      const validated = await schema.parseAsync(req.body);
+      req.body = validated;
       next();
     } catch (error) {
       if (error instanceof ZodError) {
@@ -66,8 +66,8 @@ export function validateBody(schema: z.ZodType<any>) {
         });
 
         logger.warn('Body validation failed', {
-          path: (req as any).path,
-          method: (req as any).method,
+          path: req.path,
+          method: req.method,
           errors: errorMessages,
         });
 
@@ -87,11 +87,11 @@ export function validateBody(schema: z.ZodType<any>) {
 /**
  * Validate request query parameters only
  */
-export function validateQuery(schema: z.ZodType<any>) {
+export function validateQuery<T extends z.ZodType<unknown>>(schema: T) {
   return async (req: Request, _res: Response, next: NextFunction) => {
     try {
-      const validated = await schema.parseAsync((req as any).query);
-      (req as any).query = validated;
+      const validated = await schema.parseAsync(req.query);
+      req.query = validated;
       next();
     } catch (error) {
       if (error instanceof ZodError) {
@@ -101,8 +101,8 @@ export function validateQuery(schema: z.ZodType<any>) {
         });
 
         logger.warn('Query validation failed', {
-          path: (req as any).path,
-          method: (req as any).method,
+          path: req.path,
+          method: req.method,
           errors: errorMessages,
         });
 
@@ -122,11 +122,11 @@ export function validateQuery(schema: z.ZodType<any>) {
 /**
  * Validate request params only
  */
-export function validateParams(schema: z.ZodType<any>) {
+export function validateParams<T extends z.ZodType<unknown>>(schema: T) {
   return async (req: Request, _res: Response, next: NextFunction) => {
     try {
-      const validated = await schema.parseAsync((req as any).params);
-      (req as any).params = validated;
+      const validated = await schema.parseAsync(req.params);
+      req.params = validated;
       next();
     } catch (error) {
       if (error instanceof ZodError) {
@@ -136,8 +136,8 @@ export function validateParams(schema: z.ZodType<any>) {
         });
 
         logger.warn('Params validation failed', {
-          path: (req as any).path,
-          method: (req as any).method,
+          path: req.path,
+          method: req.method,
           errors: errorMessages,
         });
 
@@ -157,16 +157,16 @@ export function validateParams(schema: z.ZodType<any>) {
 /**
  * Validate response (useful in development mode for contract testing)
  */
-export function validateResponse(schema: z.ZodType<any>) {
+export function validateResponse<T extends z.ZodType<unknown>>(schema: T) {
   return (_req: Request, res: Response, next: NextFunction) => {
     // Only validate responses in development mode
     if (process.env['NODE_ENV'] !== 'development') {
       return next();
     }
 
-    const originalJson = (res as any).json.bind(res);
+    const originalJson = res.json.bind(res);
 
-    (res as any).json = function (body: any) {
+    res.json = function (body: unknown) {
       try {
         const validated = schema.parse(body);
         return originalJson(validated);

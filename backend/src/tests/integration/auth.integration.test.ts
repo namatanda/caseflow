@@ -82,7 +82,7 @@ vi.mock('@/services/errors', () => ({
     }
   },
   ValidationError: class ValidationError extends Error {
-    constructor(message: string, issues: any[]) {
+    constructor(message: string, _issues: any[]) {
       super(message);
       this.name = 'ValidationError';
     }
@@ -218,7 +218,7 @@ describe('AuthService', () => {
         role: UserRole.DATA_ENTRY,
       };
 
-      const mockTokens = {
+      const _mockTokens = {
         accessToken: 'access-token',
         refreshToken: 'refresh-token',
       };

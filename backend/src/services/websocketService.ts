@@ -23,7 +23,7 @@ export interface ImportCompletedPayload {
   successfulRecords: number;
   failedRecords: number;
   duration: number;
-  errorDetails?: any[];
+  errorDetails?: unknown[];
 }
 
 export interface ImportFailedPayload {
@@ -75,7 +75,7 @@ class WebSocketService {
         logger.debug(`Client ${socket.id} subscribed to batch: ${batchId}`);
         socket.join(`batch:${batchId}`);
         
-        socket.emit('subscribed', {
+        void socket.emit('subscribed', {
           batchId,
           timestamp: new Date().toISOString(),
         });
@@ -86,7 +86,7 @@ class WebSocketService {
         logger.debug(`Client ${socket.id} unsubscribed from batch: ${batchId}`);
         socket.leave(`batch:${batchId}`);
         
-        socket.emit('unsubscribed', {
+        void socket.emit('unsubscribed', {
           batchId,
           timestamp: new Date().toISOString(),
         });
@@ -172,13 +172,13 @@ class WebSocketService {
   /**
    * Broadcast system message to all connected clients
    */
-  broadcastSystemMessage(message: string, data?: any): void {
+  broadcastSystemMessage(message: string, data?: unknown): void {
     if (!this.io) {
       logger.warn('WebSocket server not initialized, cannot broadcast');
       return;
     }
 
-    this.io.emit('system:message', {
+    void this.io.emit('system:message', {
       message,
       data,
       timestamp: new Date().toISOString(),
@@ -197,7 +197,7 @@ class WebSocketService {
   /**
    * Get count of subscribers for a batch
    */
-  async getBatchSubscribersCount(batchId: string): Promise<number> {
+  getBatchSubscribersCount(batchId: string): number {
     if (!this.io) {
       return 0;
     }
@@ -218,15 +218,16 @@ class WebSocketService {
    */
   async close(): Promise<void> {
     if (this.io) {
-      await new Promise<void>((resolve) => {
+      return new Promise<void>((resolve) => {
         this.io!.close(() => {
           logger.info('WebSocket server closed');
+          this.io = null;
+          this.connectedClients.clear();
           resolve();
         });
       });
-      this.io = null;
-      this.connectedClients.clear();
     }
+    return Promise.resolve();
   }
 }
 
