@@ -84,6 +84,7 @@ const stream = createReadStream(filePath);
         logger.debug(`CSV headers detected: ${headersList.join(', ')}`);
       })
       .on('data', (row: unknown) => {
+        if (maxRows > 0 && totalRows >= maxRows) {
           if (!hasReachedMaxRows) {
             warnings.push(`Maximum row limit of ${maxRows} reached. Remaining rows not processed.`);
             hasReachedMaxRows = true;
